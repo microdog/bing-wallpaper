@@ -126,7 +126,7 @@ for pic in "${urls[@]}"; do
     fi
     if [ -n "$FORCE" ] || [ ! -f "$PICTURE_DIR/$filename" ]; then
         print_message "Downloading: $filename..."
-        curl $CURL_QUIET -Lo "$PICTURE_DIR/$filename" "$pic"
+        curl $CURL_QUIET -Lo "$PICTURE_DIR/$filename" "$pic" || rm -f "$PICTURE_DIR/$filename"
     else
         print_message "Skipping: $filename..."
     fi
