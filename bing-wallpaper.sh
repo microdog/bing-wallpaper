@@ -100,12 +100,18 @@ done
 [ -n "$QUIET" ] && CURL_QUIET='-s'
 [ -n "$SSL" ]   && PROTO='https'   || PROTO='http'
 
+# Try to use ggrep instead of grep
+GREP="grep"
+if command -v ggrep &> /dev/null; then
+    GREP="ggrep"
+fi
+
 # Create picture directory if it doesn't already exist
 mkdir -p "${PICTURE_DIR}"
 
 read -ra urls < <(curl -sL "$PROTO://www.bing.com/HPImageArchive.aspx?format=js&n=$BOOST" | \
     # Extract the image urls from the JSON response
-    grep -Po '(?<=url":").*?(?=")' | \
+    $GREP -Po '(?<=url":").*?(?=")' | \
     # Set the image resolution
     sed -e "s/[[:digit:]]\{1,\}x[[:digit:]]\{1,\}/$RESOLUTION/" | \
     # FQDN the image urls
