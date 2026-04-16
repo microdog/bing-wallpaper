@@ -45,9 +45,17 @@ run_random_helper() {
     shift
 
     (
-        cd "$run_dir"
+        cd -- "$run_dir" || exit 1
         bash "$RANDOM_HELPER" "$@"
     )
+}
+
+run_random_helper_with_payload() {
+    local payload_path="$1"
+    local run_dir="$2"
+    shift 2
+
+    CURL_STUB_METADATA_PAYLOAD="$payload_path" run_random_helper "$run_dir" "$@"
 }
 
 make_curl_stub() {
@@ -116,15 +124,13 @@ HOME="$TEST_TMPDIR/home with spaces"
 mkdir -p "$HOME"
 export HOME
 
-CURL_STUB_METADATA_PAYLOAD="$FIXTURE_PATH"
 single_image_payload="$TEST_TMPDIR/single-image.json"
 printf '{"images":[{"url":"%s"}]}\n' "$(extract_first_fixture_url)" >"$single_image_payload"
-CURL_STUB_METADATA_PAYLOAD="$single_image_payload"
-export CURL_STUB_METADATA_PAYLOAD
+export CURL_STUB_METADATA_PAYLOAD="$single_image_payload"
 export BING_WALLPAPER_CURL_BIN="$TEST_TMPDIR/bin/curl-stub"
 
 picture_dir="$TEST_TMPDIR/pictures dir"
-run_random_helper "$ROOT_DIR" --quiet --picturedir "$picture_dir"
+run_random_helper_with_payload "$single_image_payload" "$ROOT_DIR" --quiet --picturedir "$picture_dir"
 
 today_target=$(readlink "$picture_dir/today.jpg")
 random_target=$(readlink "$picture_dir/random.jpg")
@@ -135,7 +141,7 @@ assert_eq "$expected_target" "$random_target" "random.jpg should fall back to to
 
 dash_run_dir="$TEST_TMPDIR/dash helper run"
 mkdir -p "$dash_run_dir"
-run_random_helper "$dash_run_dir" --quiet --picturedir -dashdir
+run_random_helper_with_payload "$single_image_payload" "$dash_run_dir" --quiet --picturedir -dashdir
 
 dash_today_path="$dash_run_dir/-dashdir/today.jpg"
 dash_random_path="$dash_run_dir/-dashdir/random.jpg"
@@ -145,6 +151,19 @@ assert_eq "$dash_expected_target" "$(readlink "$dash_today_path")" "today.jpg sh
 assert_eq "$dash_expected_target" "$(readlink "$dash_random_path")" "random.jpg should fall back correctly for dash-prefixed relative picture directories"
 assert_file_exists "$dash_today_path" "today.jpg symlink should resolve for dash-prefixed relative picture directories"
 assert_file_exists "$dash_random_path" "random.jpg symlink should resolve for dash-prefixed relative picture directories"
+
+alternate_picture_dir="$TEST_TMPDIR/pictures with alternates"
+run_random_helper_with_payload "$FIXTURE_PATH" "$ROOT_DIR" --quiet --picturedir "$alternate_picture_dir"
+
+alternate_today_target=$(readlink "$alternate_picture_dir/today.jpg")
+alternate_random_target=$(readlink "$alternate_picture_dir/random.jpg")
+alternate_today_expected="$alternate_picture_dir/OHR.SampleBeta_1920x1080.jpg"
+alternate_random_expected="$alternate_picture_dir/OHR.SampleAlpha_1920x1080.jpg"
+
+assert_eq "$alternate_today_expected" "$alternate_today_target" "today.jpg should point to the latest downloaded image when alternates exist"
+assert_eq "$alternate_random_expected" "$alternate_random_target" "random.jpg should point to a non-today wallpaper when alternates exist"
+assert_file_exists "$alternate_picture_dir/OHR.SampleAlpha_1920x1080.jpg" "alternate wallpaper candidate should exist on disk"
+assert_file_exists "$alternate_picture_dir/random.jpg" "random.jpg symlink should resolve when alternates exist"
 
 bash "$GNOME_HELPER"
 
