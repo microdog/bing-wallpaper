@@ -206,11 +206,19 @@ cat >"$TEST_TMPDIR/bin/osascript-stub" <<'EOF'
 
 set -eu
 
+if [[ $# -lt 1 || "$1" != "-" ]]; then
+    printf "osascript expected '-' programfile before args, got: %s\n" "${1-<none>}" >&2
+    exit 64
+fi
+
+shift
+
 {
-    printf 'ARGC=%s\n' "$#"
+    printf 'PROGRAMFILE=-\n'
+    printf 'APPLE_ARGC=%s\n' "$#"
     arg_index=0
     for arg in "$@"; do
-        printf 'ARGV[%d]=%s\n' "$arg_index" "$arg"
+        printf 'APPLE_ARGV[%d]=%s\n' "$arg_index" "$arg"
         arg_index=$((arg_index + 1))
     done
     printf 'STDIN:\n'
@@ -307,7 +315,9 @@ custom_filename_dir="$TEST_TMPDIR/custom-filename-pictures"
 custom_filename_stdout="$TEST_TMPDIR/custom-filename.stdout"
 custom_filename_stderr="$TEST_TMPDIR/custom-filename.stderr"
 : >"$OSASCRIPT_STUB_LOG"
-run_cli_with_path "$TEST_TMPDIR/fake-darwin" "$custom_filename_stdout" "$custom_filename_stderr" --force --boost 2 --filename custom.jpg --set-wallpaper --picturedir "$custom_filename_dir"
+if ! run_cli_with_path "$TEST_TMPDIR/fake-darwin" "$custom_filename_stdout" "$custom_filename_stderr" --force --boost 2 --filename custom.jpg --set-wallpaper --picturedir "$custom_filename_dir"; then
+    fail "Darwin-simulated custom filename wallpaper request should succeed"
+fi
 assert_file_exists "$custom_filename_dir/custom.jpg" "custom filename boost mode should leave the shared destination in place"
 assert_eq "image-bytes:http://www.bing.com/th?id=OHR.SampleAlpha_1920x1080.jpg&rf=LaDigue_1920x1080.jpg&pid=hp" "$(cat "$custom_filename_dir/custom.jpg")" "custom filename boost mode should preserve the newest image bytes"
 assert_contains "$custom_filename_dir/custom.jpg" "$(cat "$OSASCRIPT_STUB_LOG")" "custom filename boost mode should keep wallpaper targeting on the newest shared destination"
@@ -374,8 +384,9 @@ if ! run_cli_with_path "$TEST_TMPDIR/fake-darwin" "$quoted_wallpaper_stdout" "$q
 fi
 assert_eq "" "$(cat "$quoted_wallpaper_stderr")" "Darwin-simulated quoted wallpaper request should not write to stderr"
 assert_file_exists "$quoted_wallpaper_path" "Darwin-simulated quoted wallpaper request should download the image"
-assert_contains "ARGV[0]=--" "$(cat "$OSASCRIPT_STUB_LOG")" "quoted wallpaper path should be passed after the osascript argument separator"
-assert_contains "ARGV[1]=$quoted_wallpaper_path" "$(cat "$OSASCRIPT_STUB_LOG")" "quoted wallpaper path should be passed as a distinct osascript argv entry"
+assert_contains "PROGRAMFILE=-" "$(cat "$OSASCRIPT_STUB_LOG")" "quoted wallpaper path should use the stdin programfile marker"
+assert_contains "APPLE_ARGC=1" "$(cat "$OSASCRIPT_STUB_LOG")" "quoted wallpaper path should be the only AppleScript user argument"
+assert_contains "APPLE_ARGV[0]=$quoted_wallpaper_path" "$(cat "$OSASCRIPT_STUB_LOG")" "quoted wallpaper path should arrive as the first AppleScript argv entry"
 assert_contains "item 1 of argv" "$(cat "$OSASCRIPT_STUB_LOG")" "quoted wallpaper path should be read from AppleScript argv"
 assert_not_contains "set picture of every desktop to (\"$quoted_wallpaper_path\" as POSIX file as alias)" "$(cat "$OSASCRIPT_STUB_LOG")" "quoted wallpaper path should not be interpolated into the AppleScript source"
 
