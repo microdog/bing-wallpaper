@@ -83,11 +83,11 @@ download_mode=${CURL_STUB_DOWNLOAD_MODE:-success}
 
 printf '%s\n' "$*" >>"$log_file"
 
-out_file=
-url=
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        -o|-Lo|-OL|-LO)
+    out_file=
+    url=
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+        -o|--output|-Lo|-OL|-LO)
             out_file="$2"
             shift 2
             ;;
@@ -129,6 +129,20 @@ run_cli() {
     BING_WALLPAPER_CURL_BIN="$TEST_TMPDIR/bin/curl-stub" \
         BING_WALLPAPER_OSASCRIPT_BIN="$TEST_TMPDIR/bin/osascript-stub" \
         bash "$SCRIPT_PATH" "$@" >"$stdout_file" 2>"$stderr_file"
+}
+
+run_cli_in_dir() {
+    local run_dir="$1"
+    local stdout_file="$2"
+    local stderr_file="$3"
+    shift 3
+
+    (
+        cd "$run_dir"
+        BING_WALLPAPER_CURL_BIN="$TEST_TMPDIR/bin/curl-stub" \
+            BING_WALLPAPER_OSASCRIPT_BIN="$TEST_TMPDIR/bin/osascript-stub" \
+            bash "$SCRIPT_PATH" "$@" >"$stdout_file" 2>"$stderr_file"
+    )
 }
 
 TEST_TMPDIR=$(mktemp -d)
@@ -210,6 +224,12 @@ dash_filename_stdout="$TEST_TMPDIR/dash-filename.stdout"
 dash_filename_stderr="$TEST_TMPDIR/dash-filename.stderr"
 run_cli "$dash_filename_stdout" "$dash_filename_stderr" --picturedir "$TEST_TMPDIR/dash-pictures" --filename -dash.jpg --boost 1
 assert_file_exists "$TEST_TMPDIR/dash-pictures/-dash.jpg" "dash-prefixed filename should be accepted as an option value"
+
+mkdir -p "$TEST_TMPDIR/dash-run"
+dash_picturedir_stdout="$TEST_TMPDIR/dash-picturedir.stdout"
+dash_picturedir_stderr="$TEST_TMPDIR/dash-picturedir.stderr"
+run_cli_in_dir "$TEST_TMPDIR/dash-run" "$dash_picturedir_stdout" "$dash_picturedir_stderr" --picturedir -dashdir --boost 1
+assert_file_exists "$TEST_TMPDIR/dash-run/-dashdir/OHR.SampleAlpha_1920x1080.jpg" "dash-prefixed picturedir should be accepted as an option value"
 
 : >"$CURL_STUB_LOG"
 skip_stdout="$TEST_TMPDIR/skip.stdout"

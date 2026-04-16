@@ -222,9 +222,14 @@ download_image() {
     local target_path="$2"
     local filename="$3"
     local curl_args=()
+    local filesystem_target_path="$target_path"
 
     LAST_FILENAME="$filename"
     LAST_DOWNLOADED_FILE="$target_path"
+
+    if [[ "$filesystem_target_path" == -* ]]; then
+        filesystem_target_path="./$filesystem_target_path"
+    fi
 
     if [[ -z "$FORCE" && -f "$target_path" ]]; then
         print_message "Skipping: $filename..."
@@ -237,11 +242,11 @@ download_image() {
         curl_args+=(-s)
     fi
 
-    if "$CURL_BIN" "${curl_args[@]}" -Lo "$target_path" "$image_url"; then
+    if "$CURL_BIN" "${curl_args[@]}" -L --output "$filesystem_target_path" "$image_url"; then
         return 0
     fi
 
-    rm -f "$target_path"
+    rm -f -- "$filesystem_target_path"
     return 1
 }
 
@@ -278,7 +283,7 @@ run_bing_wallpaper_impl() {
     fi
 
     validate_args || return 1
-    mkdir -p "$PICTURE_DIR"
+    mkdir -p -- "$PICTURE_DIR"
     metadata_payload=$(fetch_metadata) || return 1
 
     while IFS= read -r image_url; do
