@@ -16,23 +16,50 @@
 # slideshow can be setup to rotate between today.jpg and random.jpg. Look at the
 # tools under gnome-bing-slideshow/
 
+set -euo pipefail
 
-# If an error occurs, give up and terminate.
-set -e
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+BING_SCRIPT="$SCRIPT_DIR/../bing-wallpaper.sh"
 
-SCRIPT_DIR="$(dirname ${BASH_SOURCE[0]})"
-BING_SCRIPT="${SCRIPT_DIR}/../bing-wallpaper.sh"
+# shellcheck source=../bing-wallpaper.sh disable=SC1091
+source "$BING_SCRIPT"
 
-echo 'Running the bing-wallpaper script and loading settings.'
-# NOTE: $PICTURE_DIR and $filename is sourced from bing-wallpaper.sh
-source ${BING_SCRIPT}
+normalize_path_for_command() {
+    local path="$1"
 
-echo 'Removing today.jpg and random.jpg to ensure no symlink error occurs.'
-rm "${PICTURE_DIR}/today.jpg" "${PICTURE_DIR}/random.jpg"
+    if [[ "$path" == -* ]]; then
+        printf './%s\n' "$path"
+        return 0
+    fi
 
-echo "Linking today's Bing wallpaper to today.jpg."
-ln -s -f "${PICTURE_DIR}/${filename}" "${PICTURE_DIR}/today.jpg"
+    printf '%s\n' "$path"
+}
 
-echo 'Randomly selecting a picture and linking it to random.jpg'
-ln -s -f $(ls ${PICTURE_DIR}/*_*.jpg | grep -v ${filename} | shuf -n 1) \
-  "${PICTURE_DIR}/random.jpg"
+run_bing_wallpaper "$@"
+
+if [[ -z "${LAST_DOWNLOADED_FILE:-}" ]]; then
+    printf 'Failed to determine the downloaded wallpaper path.\n' >&2
+    exit 1
+fi
+
+picture_dir=$(dirname "$LAST_DOWNLOADED_FILE")
+today_link="$picture_dir/today.jpg"
+random_link="$picture_dir/random.jpg"
+random_candidates=()
+
+while IFS= read -r candidate; do
+    if [[ "$candidate" != "$LAST_DOWNLOADED_FILE" ]]; then
+        random_candidates[${#random_candidates[@]}]="$candidate"
+    fi
+done < <(find "$picture_dir" -maxdepth 1 -type f -name '*_*.jpg' | sort)
+
+random_target="$LAST_DOWNLOADED_FILE"
+if [[ ${#random_candidates[@]} -gt 0 ]]; then
+    random_target="${random_candidates[RANDOM % ${#random_candidates[@]}]}"
+fi
+
+rm -f -- "$today_link" "$random_link"
+ln -s "$(normalize_path_for_command "$LAST_DOWNLOADED_FILE")" \
+    "$(normalize_path_for_command "$today_link")"
+ln -s "$(normalize_path_for_command "$random_target")" \
+    "$(normalize_path_for_command "$random_link")"

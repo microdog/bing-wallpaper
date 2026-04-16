@@ -11,23 +11,16 @@
 #     Pictures/bing-wallpapers/random.jpg
 # Tested for Ubuntu versions 12.04 - 13.10.
 
+set -euo pipefail
 
-# If an error occurs, give up and terminate.
-set -e
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+LOCAL_SHARE_DIR="$HOME/.local/share"
+PROPERTIES_DIR="$LOCAL_SHARE_DIR/gnome-background-properties"
+SLIDESHOW_DIR="$LOCAL_SHARE_DIR/background/slideshows"
 
-SCRIPT_DIR="$(dirname ${BASH_SOURCE[0]})"
+mkdir -p "$PROPERTIES_DIR" "$SLIDESHOW_DIR"
 
-echo 'Making .local/share directories.'
-mkdir -p ${HOME}/.local/share/gnome-background-properties/
-mkdir -p ${HOME}/.local/share/background/slideshows
-
-echo 'Copying and registering bing slideshow to available desktop backgrounds.'
-cp \
-  ${SCRIPT_DIR}/dot_local/share/gnome-background-properties/bing-slideshow.xml \
-  ${HOME}/.local/share/gnome-background-properties
-
-echo 'Copying bing slideshow definition.'
-cp \
-  ${SCRIPT_DIR}/dot_local/share/background/slideshows/bing-today.xml \
-  ${HOME}/.local/share/background/slideshows
-
+cp "$SCRIPT_DIR/dot_local/share/gnome-background-properties/bing-slideshow.xml" \
+    "$PROPERTIES_DIR/bing-slideshow.xml"
+cp "$SCRIPT_DIR/dot_local/share/background/slideshows/bing-today.xml" \
+    "$SLIDESHOW_DIR/bing-today.xml"
