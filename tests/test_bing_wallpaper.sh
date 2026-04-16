@@ -276,6 +276,15 @@ run_cli "$boost_one_stdout" "$boost_one_stderr" --picturedir "$boost_one_dir" --
 assert_file_exists "$boost_one_dir/OHR.SampleAlpha_1920x1080.jpg" "boost 1 should download the newest image"
 assert_file_absent "$boost_one_dir/OHR.SampleBeta_1920x1080.jpg" "boost 1 should not download older images"
 
+custom_filename_dir="$TEST_TMPDIR/custom-filename-pictures"
+custom_filename_stdout="$TEST_TMPDIR/custom-filename.stdout"
+custom_filename_stderr="$TEST_TMPDIR/custom-filename.stderr"
+: >"$OSASCRIPT_STUB_LOG"
+run_cli_with_path "$TEST_TMPDIR/fake-darwin" "$custom_filename_stdout" "$custom_filename_stderr" --force --boost 2 --filename custom.jpg --set-wallpaper --picturedir "$custom_filename_dir"
+assert_file_exists "$custom_filename_dir/custom.jpg" "custom filename boost mode should leave the shared destination in place"
+assert_eq "image-bytes:http://www.bing.com/th?id=OHR.SampleAlpha_1920x1080.jpg&rf=LaDigue_1920x1080.jpg&pid=hp" "$(cat "$custom_filename_dir/custom.jpg")" "custom filename boost mode should preserve the newest image bytes"
+assert_contains "$custom_filename_dir/custom.jpg" "$(cat "$OSASCRIPT_STUB_LOG")" "custom filename boost mode should keep wallpaper targeting on the newest shared destination"
+
 dash_filename_stdout="$TEST_TMPDIR/dash-filename.stdout"
 dash_filename_stderr="$TEST_TMPDIR/dash-filename.stderr"
 run_cli "$dash_filename_stdout" "$dash_filename_stderr" --picturedir "$TEST_TMPDIR/dash-pictures" --filename -dash.jpg --boost 1

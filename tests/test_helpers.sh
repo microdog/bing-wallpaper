@@ -237,6 +237,18 @@ assert_eq "$boost_one_expected_target" "$boost_one_today_target" "boost 1 should
 assert_eq "$boost_one_expected_target" "$boost_one_random_target" "boost 1 should keep random.jpg on the only downloaded image"
 assert_file_absent "$boost_one_picture_dir/OHR.SampleBeta_1920x1080.jpg" "boost 1 should not download older helper images"
 
+custom_filename_picture_dir="$TEST_TMPDIR/pictures custom filename"
+run_random_helper_with_payload "$FIXTURE_PATH" "$ROOT_DIR" --quiet --force --boost 2 --filename custom.jpg --picturedir "$custom_filename_picture_dir"
+
+custom_filename_today_target=$(readlink "$custom_filename_picture_dir/today.jpg")
+custom_filename_random_target=$(readlink "$custom_filename_picture_dir/random.jpg")
+custom_filename_expected_target="$custom_filename_picture_dir/custom.jpg"
+
+assert_eq "$custom_filename_expected_target" "$custom_filename_today_target" "custom filename boost mode should keep today.jpg on the newest shared destination"
+assert_eq "$custom_filename_expected_target" "$custom_filename_random_target" "custom filename boost mode should make random.jpg fall back to the only shared destination"
+assert_eq "image-bytes:http://www.bing.com/th?id=OHR.SampleAlpha_1920x1080.jpg&rf=LaDigue_1920x1080.jpg&pid=hp" "$(cat "$custom_filename_picture_dir/custom.jpg")" "custom filename boost mode should preserve the newest image bytes for helper symlinks"
+assert_file_absent "$custom_filename_picture_dir/OHR.SampleBeta_1920x1080.jpg" "custom filename boost mode should not create an alternate helper image when sharing one destination"
+
 dash_run_dir="$TEST_TMPDIR/dash helper run"
 mkdir -p "$dash_run_dir"
 run_random_helper_with_payload "$single_image_payload" "$dash_run_dir" --quiet --picturedir -dashdir
