@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC1117
 
-SCRIPT=$(basename "$0")
-readonly SCRIPT
+set -euo pipefail
+
+SCRIPT=$(basename "${BASH_SOURCE[0]}")
 VERSION='0.5.0'
-readonly VERSION
 RESOLUTIONS=(UHD 1920x1200 1920x1080 800x480 400x240)
+
+readonly SCRIPT
+readonly VERSION
 readonly RESOLUTIONS
 
 usage() {
@@ -36,104 +38,274 @@ EOF
 }
 
 print_message() {
-    if [ -z "$QUIET" ]; then
-        printf "%s\n" "${1}"
+    if [[ -z "${QUIET}" ]]; then
+        printf '%s\n' "$1"
     fi
 }
 
-# Defaults
-PICTURE_DIR="$HOME/Pictures/bing-wallpapers/"
-RESOLUTION="1920x1080"
+print_error() {
+    printf '%s\n' "$1" >&2
+}
 
-# Option parsing
-BOOST=1
-while [[ $# -gt 0 ]]; do
-    key="$1"
+die() {
+    print_error "$1"
+    return 1
+}
 
-    case $key in
-        -r|--resolution)
-            RESOLUTION="$2"
-            shift
-            ;;
-        -p|--picturedir)
-            PICTURE_DIR="$2"
-            shift
-            ;;
-        -n|--filename)
-            FILENAME="$2"
-            shift
-            ;;
-        -f|--force)
-            FORCE=true
-            ;;
-        -s|--ssl)
-            SSL=true
-            ;;
-        -b|--boost)
-            BOOST=$(($2))
-            shift
-            ;;
-        -q|--quiet)
-            QUIET=true
-            ;;
-        -h|--help)
-            usage
-            exit 0
-            ;;
-        -w|--set-wallpaper)
-            SET_WALLPAPER=true
-            ;;
-        --version)
-            printf "%s\n" $VERSION
-            exit 0
-            ;;
-        *)
-            (>&2 printf "Unknown parameter: %s\n" "$1")
-            usage
-            exit 1
-            ;;
-    esac
-    shift
-done
+reset_state() {
+    PICTURE_DIR="${HOME}/Pictures/bing-wallpapers/"
+    RESOLUTION='1920x1080'
+    BOOST='1'
+    FILENAME=''
+    FORCE=''
+    QUIET=''
+    SSL=''
+    SET_WALLPAPER=''
+    SHOW_HELP=''
+    SHOW_VERSION=''
+    PROTO='http'
+    CURL_BIN="${BING_WALLPAPER_CURL_BIN:-curl}"
+    OSASCRIPT_BIN="${BING_WALLPAPER_OSASCRIPT_BIN:-/usr/bin/osascript}"
+    LAST_DOWNLOADED_FILE=''
+    LAST_FILENAME=''
+}
 
-# Set options
-[ -n "$QUIET" ] && CURL_QUIET='-s'
-[ -n "$SSL" ]   && PROTO='https'   || PROTO='http'
+is_supported_resolution() {
+    local candidate="$1"
+    local supported
 
-# Try to use ggrep instead of grep
-GREP="grep"
-if command -v ggrep &> /dev/null; then
-    GREP="ggrep"
-fi
+    for supported in "${RESOLUTIONS[@]}"; do
+        if [[ "$supported" == "$candidate" ]]; then
+            return 0
+        fi
+    done
 
-# Create picture directory if it doesn't already exist
-mkdir -p "${PICTURE_DIR}"
+    return 1
+}
 
-read -ra urls < <(curl -sL "$PROTO://www.bing.com/HPImageArchive.aspx?format=js&n=$BOOST" | \
-    # Extract the image urls from the JSON response
-    $GREP -Po '(?<=url":").*?(?=")' | \
-    # Set the image resolution
-    sed -e "s/[[:digit:]]\{1,\}x[[:digit:]]\{1,\}/$RESOLUTION/" | \
-    # FQDN the image urls
-    sed -e "s/\(.*\)/${PROTO}\:\/\/www.bing.com\1/" | \
-    tr "\n" " ")
+extract_image_urls_from_payload() {
+    local payload="$1"
+    local resolution="$2"
+    local proto="$3"
+    local remainder="$payload"
+    local raw_url
+    local normalized_url
+    local match
 
-for pic in "${urls[@]}"; do
-    if [ -z "$FILENAME" ]; then
-        filename=$(echo "$pic" | sed -e 's/.*[?&;]id=\([^&]*\).*/\1/' | grep -oe '[^\.]*\.[^\.]*$')
+    remainder=${remainder//$'\n'/ }
+    remainder=${remainder//$'\r'/ }
+
+    while [[ "$remainder" =~ \"url\"[[:space:]]*:[[:space:]]*\"([^\"]+)\" ]]; do
+        match="${BASH_REMATCH[0]}"
+        raw_url="${BASH_REMATCH[1]}"
+        normalized_url=$(printf '%s' "$raw_url" | sed "s/[0-9][0-9]*x[0-9][0-9]*/$resolution/g")
+
+        case "$normalized_url" in
+            http://*|https://*)
+                printf '%s\n' "$normalized_url"
+                ;;
+            *)
+                printf '%s://www.bing.com%s\n' "$proto" "$normalized_url"
+                ;;
+        esac
+
+        remainder="${remainder#*"$match"}"
+    done
+}
+
+derive_filename_from_url() {
+    local url="$1"
+    local filename
+
+    if [[ "$url" == *'?id='* || "$url" == *'&id='* ]]; then
+        filename="${url#*id=}"
+        filename="${filename%%&*}"
     else
-        filename="$FILENAME"
+        filename="${url##*/}"
+        filename="${filename%%\?*}"
     fi
-    if [ -n "$FORCE" ] || [ ! -f "$PICTURE_DIR/$filename" ]; then
-        print_message "Downloading: $filename..."
-        curl $CURL_QUIET -Lo "$PICTURE_DIR/$filename" "$pic" || rm -f "$PICTURE_DIR/$filename"
+
+    printf '%s\n' "${filename##*/}"
+}
+
+require_option_value() {
+    local option="$1"
+    local value="${2-}"
+
+    if [[ -z "$value" ]] || [[ "$value" == -* ]]; then
+        die "Option requires a value: $option"
+    fi
+}
+
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -r|--resolution)
+                require_option_value "$1" "${2-}" || return 1
+                RESOLUTION="$2"
+                shift 2
+                ;;
+            -p|--picturedir)
+                require_option_value "$1" "${2-}" || return 1
+                PICTURE_DIR="$2"
+                shift 2
+                ;;
+            -n|--filename)
+                require_option_value "$1" "${2-}" || return 1
+                FILENAME="$2"
+                shift 2
+                ;;
+            -f|--force)
+                FORCE='true'
+                shift
+                ;;
+            -s|--ssl)
+                SSL='true'
+                shift
+                ;;
+            -b|--boost)
+                require_option_value "$1" "${2-}" || return 1
+                BOOST="$2"
+                shift 2
+                ;;
+            -q|--quiet)
+                QUIET='true'
+                shift
+                ;;
+            -h|--help)
+                SHOW_HELP='true'
+                shift
+                ;;
+            -w|--set-wallpaper)
+                SET_WALLPAPER='true'
+                shift
+                ;;
+            --version)
+                SHOW_VERSION='true'
+                shift
+                ;;
+            *)
+                print_error "Unknown parameter: $1"
+                usage >&2
+                return 1
+                ;;
+        esac
+    done
+}
+
+validate_args() {
+    if ! is_supported_resolution "$RESOLUTION"; then
+        die "Unsupported resolution: $RESOLUTION"
+        return 1
+    fi
+
+    if [[ ! "$BOOST" =~ ^[1-9][0-9]*$ ]]; then
+        die "Boost must be a positive integer: $BOOST"
+        return 1
+    fi
+
+    if [[ -n "$SSL" ]]; then
+        PROTO='https'
     else
+        PROTO='http'
+    fi
+
+    return 0
+}
+
+fetch_metadata() {
+    "$CURL_BIN" -fsSL "${PROTO}://www.bing.com/HPImageArchive.aspx?format=js&n=${BOOST}"
+}
+
+download_image() {
+    local image_url="$1"
+    local target_path="$2"
+    local filename="$3"
+    local curl_args=()
+
+    LAST_FILENAME="$filename"
+    LAST_DOWNLOADED_FILE="$target_path"
+
+    if [[ -z "$FORCE" && -f "$target_path" ]]; then
         print_message "Skipping: $filename..."
+        return 0
     fi
-done
 
-if [ -n "$SET_WALLPAPER" ]; then
-    /usr/bin/osascript<<END
-tell application "System Events" to set picture of every desktop to ("$PICTURE_DIR/$filename" as POSIX file as alias)
-END
+    print_message "Downloading: $filename..."
+
+    if [[ -n "$QUIET" ]]; then
+        curl_args+=(-s)
+    fi
+
+    if "$CURL_BIN" "${curl_args[@]}" -Lo "$target_path" "$image_url"; then
+        return 0
+    fi
+
+    rm -f "$target_path"
+    return 1
+}
+
+set_macos_wallpaper() {
+    local picture_path="$1"
+
+    if [[ "$(uname -s)" != 'Darwin' ]]; then
+        die 'Setting wallpaper is only supported on macOS.'
+        return 1
+    fi
+
+    "$OSASCRIPT_BIN" <<EOF
+tell application "System Events" to set picture of every desktop to ("$picture_path" as POSIX file as alias)
+EOF
+}
+
+run_bing_wallpaper() {
+    local metadata_payload
+    local image_url
+    local filename
+    local found_urls='0'
+
+    reset_state
+    parse_args "$@" || return 1
+
+    if [[ -n "$SHOW_HELP" ]]; then
+        usage
+        return 0
+    fi
+
+    if [[ -n "$SHOW_VERSION" ]]; then
+        printf '%s\n' "$VERSION"
+        return 0
+    fi
+
+    validate_args || return 1
+    mkdir -p "$PICTURE_DIR"
+    metadata_payload=$(fetch_metadata) || return 1
+
+    while IFS= read -r image_url; do
+        if [[ -z "$image_url" ]]; then
+            continue
+        fi
+
+        found_urls='1'
+
+        if [[ -n "$FILENAME" ]]; then
+            filename="$FILENAME"
+        else
+            filename=$(derive_filename_from_url "$image_url")
+        fi
+
+        download_image "$image_url" "${PICTURE_DIR%/}/$filename" "$filename" || return 1
+    done < <(extract_image_urls_from_payload "$metadata_payload" "$RESOLUTION" "$PROTO")
+
+    if [[ "$found_urls" != '1' ]]; then
+        die 'No image URLs found in metadata response.'
+    fi
+
+    if [[ -n "$SET_WALLPAPER" ]]; then
+        set_macos_wallpaper "$LAST_DOWNLOADED_FILE" || return 1
+    fi
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    run_bing_wallpaper "$@"
 fi
