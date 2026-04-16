@@ -317,6 +317,8 @@ run_bing_wallpaper() {
     local status
 
     LAST_DOWNLOADED_FILE=''
+    # LAST_FILENAME is tracked state surfaced to callers after the subshell exits.
+    # shellcheck disable=SC2034
     LAST_FILENAME=''
     script_path="$SCRIPT_PATH"
     state_file=$(mktemp "${TMPDIR:-/tmp}/bing-wallpaper-state.XXXXXX") || return 1
