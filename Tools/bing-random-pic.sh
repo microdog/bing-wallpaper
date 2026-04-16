@@ -38,8 +38,7 @@ resolve_absolute_path() {
 run_bing_wallpaper "$@"
 
 if [[ -z "${LAST_DOWNLOADED_FILE:-}" ]]; then
-    printf 'Failed to determine the downloaded wallpaper path.\n' >&2
-    exit 1
+    exit 0
 fi
 
 downloaded_file=$(resolve_absolute_path "$LAST_DOWNLOADED_FILE")

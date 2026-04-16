@@ -18,6 +18,20 @@ pass_check() {
     CHECKS=$((CHECKS + 1))
 }
 
+assert_status_eq() {
+    local expected="$1"
+    local actual="$2"
+    local message="$3"
+
+    if [[ "$actual" -ne "$expected" ]]; then
+        fail "$message
+expected: $expected
+actual:   $actual"
+    fi
+
+    pass_check
+}
+
 assert_eq() {
     local expected="$1"
     local actual="$2"
@@ -128,6 +142,18 @@ single_image_payload="$TEST_TMPDIR/single-image.json"
 printf '{"images":[{"url":"%s"}]}\n' "$(extract_first_fixture_url)" >"$single_image_payload"
 export CURL_STUB_METADATA_PAYLOAD="$single_image_payload"
 export BING_WALLPAPER_CURL_BIN="$TEST_TMPDIR/bin/curl-stub"
+
+version_stdout="$TEST_TMPDIR/helper-version.stdout"
+version_stderr="$TEST_TMPDIR/helper-version.stderr"
+if run_random_helper "$ROOT_DIR" --version >"$version_stdout" 2>"$version_stderr"; then
+    version_status=0
+else
+    version_status=$?
+fi
+
+assert_status_eq 0 "$version_status" "wrapper --version should succeed"
+assert_eq "0.5.0" "$(cat "$version_stdout")" "wrapper --version should forward version output"
+assert_eq "" "$(cat "$version_stderr")" "wrapper --version should not write wrapper errors"
 
 picture_dir="$TEST_TMPDIR/pictures dir"
 run_random_helper_with_payload "$single_image_payload" "$ROOT_DIR" --quiet --picturedir "$picture_dir"
