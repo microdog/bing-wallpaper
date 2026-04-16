@@ -1,25 +1,25 @@
-Bing Wallpaper for Mac and Ubuntu
-=================================
+Bing Wallpaper for macOS and GNOME Linux
+========================================
 
-Information
------------
-A script which downloads the latest picture of the day from Bing.com and saves
-it to a directory.
+`bing-wallpaper.sh` downloads the current Bing homepage image into a local
+directory. The maintained scope is:
 
-The script was tested on:
+- macOS: download support plus `--set-wallpaper`
+- Linux: reliable download support plus the GNOME helper scripts in `Tools/`
 
-- Mac OS X 10.8 - 10.12
-- Ubuntu 12.04 - 16.04
-- Arch 2022.01.01
+Usage
+-----
 
-How to use?
------------
-* Just run the **bing-wallpaper.sh** script from the terminal. The script will
-download today's bing image.
-* To see available options run the sript with the `--help` flag:
+Run the script directly to download the current Bing homepage image:
 
+```bash
+./bing-wallpaper.sh
 ```
-$ ./bing-wallpaper.sh --help
+
+The default download directory is `$HOME/Pictures/bing-wallpapers/`. Use
+`--help` to see the full public CLI:
+
+```text
 Usage:
   bing-wallpaper.sh [options]
   bing-wallpaper.sh -h | --help
@@ -44,42 +44,60 @@ Options:
   --version                      Show version.
 ```
 
-Configuration on Mac
---------------------
-* Open Mac's `System Preferences` -> `Desktop & Screensaver`, add the wallpaper
-directory, and configure to taste.
+Examples:
 
-* To have the script run everyday automatically you will need to setup
-launchd. I have provided a sample plist file, found in the Tools
-directory, which can be copied to **$HOME/Library/LaunchAgents** and
-loaded with the command `launchctl load
-$HOME/Library/LaunchAgents/com.ideasftw.bing-wallpaper.plist`. Modify
-the plist as needed to point to **bing-wallpaper.sh**.
-
-Configuration on Ubuntu
------------------------
-**TL;DR:**
-
-* To install Gnome background slideshow, in the terminal run:
-
-```
-$ git clone git@github.com:thejandroman/bing-wallpaper.git
-$ bing-wallpaper/Tools/gnome-bing-slideshow/deploy-gnome-settings.sh
+```bash
+./bing-wallpaper.sh --ssl --boost 2
+./bing-wallpaper.sh --picturedir "$HOME/Pictures/bing" --resolution UHD
+./bing-wallpaper.sh --set-wallpaper
 ```
 
-* Register `bing-wallpaper/bing-random-pic.sh` to run regularly.
+macOS
+-----
 
-* Change the background properties to use the new slideshow.
+On macOS, the maintained workflow is:
 
-**How to register bing-wallpaper.sh or bing-random-pic.sh to run regularly.**
+1. Download the image with `./bing-wallpaper.sh`
+2. Optionally set it immediately with `./bing-wallpaper.sh --set-wallpaper`
+3. Automate the script with `launchd` if you want a daily refresh
 
-There are two ways to run the scipts regularly: cron jobs and startup
-applications.
-* Cron jobs:
-  * Change the path of **bing-wallpaper.sh** in **Tools/bing-cron** to the
-    desired script location. If left unchanged the default value is
-    **~/Pictures/bing-wallpaper.sh**.
-  * From the terminal run `crontab /path/to/bing-cron` to setup the cronjob.
-* Startup programs:
-  * From HUD, search for startup applications.
-  * Add **bing-random-pic.sh** or **bing-wallpaper.sh**.
+A sample LaunchAgent plist is provided at
+`Tools/com.ideasftw.bing-wallpaper.plist`. Copy it to
+`$HOME/Library/LaunchAgents/`, update the script path to match your local
+checkout, and load it:
+
+```bash
+cp Tools/com.ideasftw.bing-wallpaper.plist "$HOME/Library/LaunchAgents/"
+launchctl bootstrap "gui/$(id -u)" \
+  "$HOME/Library/LaunchAgents/com.ideasftw.bing-wallpaper.plist"
+```
+
+If you prefer to rotate through the downloaded directory in System Settings,
+point Wallpaper at your chosen picture directory.
+
+GNOME Linux
+-----------
+
+On Linux, the maintained path is downloading images with `bing-wallpaper.sh`
+and using the GNOME helper scripts when you want slideshow-style rotation.
+
+The GNOME helper workflow is:
+
+1. Run `./bing-wallpaper.sh` on a schedule to keep the directory populated
+2. Run `Tools/bing-random-pic.sh` when you want `today.jpg` and `random.jpg`
+   symlinks updated for GNOME
+3. Run `Tools/gnome-bing-slideshow/deploy-gnome-settings.sh` once per user to
+   install the slideshow XML files into `~/.local/share/`
+4. In GNOME Settings, choose the installed Bing slideshow background
+
+Example setup:
+
+```bash
+./bing-wallpaper.sh --picturedir "$HOME/Pictures/bing-wallpapers"
+bash Tools/bing-random-pic.sh --picturedir "$HOME/Pictures/bing-wallpapers"
+bash Tools/gnome-bing-slideshow/deploy-gnome-settings.sh
+```
+
+To automate downloads or link refreshes, use your preferred scheduler. The
+repository includes `Tools/bing-cron` as a cron example that you can adapt to
+your local paths.
