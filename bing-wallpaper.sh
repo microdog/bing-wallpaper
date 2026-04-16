@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-SCRIPT=$(basename "${BASH_SOURCE[0]}")
+SCRIPT=$(basename "${BING_WALLPAPER_SCRIPT_NAME:-${BASH_SOURCE[0]}}")
 SCRIPT_PATH=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/$(basename "${BASH_SOURCE[0]}")
 VERSION='0.5.0'
 RESOLUTIONS=(UHD 1920x1200 1920x1080 800x480 400x240)

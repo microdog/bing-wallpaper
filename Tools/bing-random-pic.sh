@@ -35,6 +35,8 @@ resolve_absolute_path() {
     printf '%s/%s\n' "$(cd -- "$path_dir" && pwd -P)" "$path_base"
 }
 
+BING_WALLPAPER_SCRIPT_NAME=$(basename "$0")
+export BING_WALLPAPER_SCRIPT_NAME
 run_bing_wallpaper "$@"
 
 if [[ -z "${LAST_DOWNLOADED_FILE:-}" ]]; then

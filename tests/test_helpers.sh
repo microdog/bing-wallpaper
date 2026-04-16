@@ -46,6 +46,20 @@ actual:   $actual"
     pass_check
 }
 
+assert_contains() {
+    local needle="$1"
+    local haystack="$2"
+    local message="$3"
+
+    if [[ "$haystack" != *"$needle"* ]]; then
+        fail "$message
+expected substring: $needle
+actual:             $haystack"
+    fi
+
+    pass_check
+}
+
 assert_file_exists() {
     local path="$1"
     local message="$2"
@@ -155,6 +169,20 @@ assert_status_eq 0 "$version_status" "wrapper --version should succeed"
 assert_eq "0.5.0" "$(cat "$version_stdout")" "wrapper --version should forward version output"
 assert_eq "" "$(cat "$version_stderr")" "wrapper --version should not write wrapper errors"
 
+help_stdout="$TEST_TMPDIR/helper-help.stdout"
+help_stderr="$TEST_TMPDIR/helper-help.stderr"
+if run_random_helper "$ROOT_DIR" --help >"$help_stdout" 2>"$help_stderr"; then
+    help_status=0
+else
+    help_status=$?
+fi
+
+help_output=$(cat "$help_stdout")
+
+assert_status_eq 0 "$help_status" "wrapper --help should succeed"
+assert_contains "bing-random-pic.sh [options]" "$help_output" "wrapper --help should identify the helper script"
+assert_eq "" "$(cat "$help_stderr")" "wrapper --help should not write wrapper errors"
+
 picture_dir="$TEST_TMPDIR/pictures dir"
 run_random_helper_with_payload "$single_image_payload" "$ROOT_DIR" --quiet --picturedir "$picture_dir"
 
@@ -179,7 +207,7 @@ assert_file_exists "$dash_today_path" "today.jpg symlink should resolve for dash
 assert_file_exists "$dash_random_path" "random.jpg symlink should resolve for dash-prefixed relative picture directories"
 
 alternate_picture_dir="$TEST_TMPDIR/pictures with alternates"
-run_random_helper_with_payload "$FIXTURE_PATH" "$ROOT_DIR" --quiet --picturedir "$alternate_picture_dir"
+run_random_helper_with_payload "$FIXTURE_PATH" "$ROOT_DIR" --quiet --boost 2 --picturedir "$alternate_picture_dir"
 
 alternate_today_target=$(readlink "$alternate_picture_dir/today.jpg")
 alternate_random_target=$(readlink "$alternate_picture_dir/random.jpg")
