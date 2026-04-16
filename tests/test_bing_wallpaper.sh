@@ -284,6 +284,7 @@ run_cli_with_path "$TEST_TMPDIR/fake-darwin" "$custom_filename_stdout" "$custom_
 assert_file_exists "$custom_filename_dir/custom.jpg" "custom filename boost mode should leave the shared destination in place"
 assert_eq "image-bytes:http://www.bing.com/th?id=OHR.SampleAlpha_1920x1080.jpg&rf=LaDigue_1920x1080.jpg&pid=hp" "$(cat "$custom_filename_dir/custom.jpg")" "custom filename boost mode should preserve the newest image bytes"
 assert_contains "$custom_filename_dir/custom.jpg" "$(cat "$OSASCRIPT_STUB_LOG")" "custom filename boost mode should keep wallpaper targeting on the newest shared destination"
+assert_eq "" "$(cat "$custom_filename_stderr")" "custom filename boost mode should not write to stderr"
 
 dash_filename_stdout="$TEST_TMPDIR/dash-filename.stdout"
 dash_filename_stderr="$TEST_TMPDIR/dash-filename.stderr"

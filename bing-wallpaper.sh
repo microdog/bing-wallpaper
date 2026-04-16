@@ -298,6 +298,10 @@ run_bing_wallpaper_impl() {
 
         found_urls='1'
 
+        if [[ -n "$FILENAME" && -n "$CURRENT_DOWNLOADED_FILE" ]]; then
+            continue
+        fi
+
         if [[ -n "$FILENAME" ]]; then
             filename="$FILENAME"
         else
@@ -310,10 +314,6 @@ run_bing_wallpaper_impl() {
         if [[ -z "$CURRENT_DOWNLOADED_FILE" ]]; then
             CURRENT_DOWNLOADED_FILE="$target_path"
             CURRENT_FILENAME="$filename"
-        fi
-
-        if [[ -n "$FILENAME" ]]; then
-            break
         fi
     done < <(extract_image_urls_from_payload "$metadata_payload" "$RESOLUTION" "$PROTO")
 

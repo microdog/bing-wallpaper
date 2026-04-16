@@ -94,6 +94,30 @@ run_random_helper_with_payload() {
     CURL_STUB_METADATA_PAYLOAD="$payload_path" run_random_helper "$run_dir" "$@"
 }
 
+make_slow_extractor_override() {
+    local override_path="$1"
+
+    cat >"$override_path" <<'EOF'
+inject_bing_test_override() {
+    if [[ ${BASH_COMMAND:-} == 'run_bing_wallpaper_impl "$@"' ]]; then
+        extract_image_urls_from_payload() {
+            local i
+
+            printf '%s\n' 'http://www.bing.com/th?id=OHR.SampleAlpha_1920x1080.jpg&pid=hp'
+            for ((i = 1; i <= 100; i++)); do
+                sleep 0.01
+                printf '%s\n' "http://www.bing.com/th?id=OHR.SampleBeta${i}_1920x1080.jpg&pid=hp"
+            done
+        }
+
+        trap - DEBUG
+    fi
+}
+
+trap inject_bing_test_override DEBUG
+EOF
+}
+
 make_curl_stub() {
     local stub_path="$1"
 
@@ -248,6 +272,21 @@ assert_eq "$custom_filename_expected_target" "$custom_filename_today_target" "cu
 assert_eq "$custom_filename_expected_target" "$custom_filename_random_target" "custom filename boost mode should make random.jpg fall back to the only shared destination"
 assert_eq "image-bytes:http://www.bing.com/th?id=OHR.SampleAlpha_1920x1080.jpg&rf=LaDigue_1920x1080.jpg&pid=hp" "$(cat "$custom_filename_picture_dir/custom.jpg")" "custom filename boost mode should preserve the newest image bytes for helper symlinks"
 assert_file_absent "$custom_filename_picture_dir/OHR.SampleBeta_1920x1080.jpg" "custom filename boost mode should not create an alternate helper image when sharing one destination"
+
+slow_override_path="$TEST_TMPDIR/slow-extractor-override.sh"
+slow_custom_stdout="$TEST_TMPDIR/slow-custom.stdout"
+slow_custom_stderr="$TEST_TMPDIR/slow-custom.stderr"
+slow_custom_picture_dir="$TEST_TMPDIR/pictures custom filename slow"
+make_slow_extractor_override "$slow_override_path"
+if BASH_ENV="$slow_override_path" run_random_helper "$ROOT_DIR" --quiet --force --boost 2 --filename custom.jpg --picturedir "$slow_custom_picture_dir" >"$slow_custom_stdout" 2>"$slow_custom_stderr"; then
+    slow_custom_status=0
+else
+    slow_custom_status=$?
+fi
+
+assert_status_eq 0 "$slow_custom_status" "slow extractor helper run should still succeed for a shared custom filename"
+assert_eq "" "$(cat "$slow_custom_stderr")" "slow extractor helper run should not leak broken-pipe stderr"
+assert_eq "image-bytes:http://www.bing.com/th?id=OHR.SampleAlpha_1920x1080.jpg&pid=hp" "$(cat "$slow_custom_picture_dir/custom.jpg")" "slow extractor helper run should keep the first custom-filename download"
 
 dash_run_dir="$TEST_TMPDIR/dash helper run"
 mkdir -p "$dash_run_dir"
