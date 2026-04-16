@@ -78,14 +78,15 @@ point Wallpaper at your chosen picture directory.
 GNOME Linux
 -----------
 
-On Linux, the maintained path is downloading images with `bing-wallpaper.sh`
-and using the GNOME helper scripts when you want slideshow-style rotation.
+On Linux, the maintained path is using `bing-wallpaper.sh` for reliable
+downloads and the GNOME helper scripts when you want slideshow-style rotation.
 
 The GNOME helper workflow is:
 
 1. Run `./bing-wallpaper.sh` on a schedule to keep the directory populated
-2. Run `Tools/bing-random-pic.sh` when you want `today.jpg` and `random.jpg`
-   symlinks updated for GNOME
+2. Or run `Tools/bing-random-pic.sh` when you want one command that downloads
+   the current image and refreshes the `today.jpg` and `random.jpg` symlinks
+   for GNOME
 3. Run `Tools/gnome-bing-slideshow/deploy-gnome-settings.sh` once per user to
    install the slideshow XML files into `~/.local/share/`
 4. In GNOME Settings, choose the installed Bing slideshow background
@@ -93,11 +94,10 @@ The GNOME helper workflow is:
 Example setup:
 
 ```bash
-./bing-wallpaper.sh --picturedir "$HOME/Pictures/bing-wallpapers"
 bash Tools/bing-random-pic.sh --picturedir "$HOME/Pictures/bing-wallpapers"
 bash Tools/gnome-bing-slideshow/deploy-gnome-settings.sh
 ```
 
-To automate downloads or link refreshes, use your preferred scheduler. The
+To automate downloads or helper refreshes, use your preferred scheduler. The
 repository includes `Tools/bing-cron` as a cron example that you can adapt to
 your local paths.
