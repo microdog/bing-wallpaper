@@ -32,7 +32,7 @@ resolve_absolute_path() {
     path_dir=$(dirname -- "$path")
     path_base=$(basename -- "$path")
 
-    printf '%s/%s\n' "$(cd -- "$path_dir" && pwd -P)" "$path_base"
+    printf '%s/%s\n' "$(cd -- "$path_dir" && pwd -L)" "$path_base"
 }
 
 BING_WALLPAPER_SCRIPT_NAME=$(basename "$0")

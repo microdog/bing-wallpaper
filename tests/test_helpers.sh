@@ -263,6 +263,20 @@ expected_target="$picture_dir/OHR.SampleAlpha_1920x1080.jpg"
 assert_eq "$expected_target" "$today_target" "today.jpg should point to the downloaded image"
 assert_eq "$expected_target" "$random_target" "random.jpg should fall back to today's image when no alternate image exists"
 
+logical_root="$TEST_TMPDIR/logical helper root"
+physical_root="$TEST_TMPDIR/physical helper root"
+mkdir -p "$physical_root"
+ln -s "$physical_root" "$logical_root"
+logical_picture_dir="$logical_root/pictures via symlink"
+run_random_helper_with_payload "$single_image_payload" "$ROOT_DIR" --quiet --picturedir "$logical_picture_dir"
+
+logical_today_target=$(readlink "$logical_picture_dir/today.jpg")
+logical_random_target=$(readlink "$logical_picture_dir/random.jpg")
+logical_expected_target="$logical_picture_dir/OHR.SampleAlpha_1920x1080.jpg"
+
+assert_eq "$logical_expected_target" "$logical_today_target" "today.jpg should preserve logical picture directory paths"
+assert_eq "$logical_expected_target" "$logical_random_target" "random.jpg should preserve logical picture directory paths"
+
 boost_one_picture_dir="$TEST_TMPDIR/pictures boost one"
 run_random_helper_with_payload "$FIXTURE_PATH" "$ROOT_DIR" --quiet --boost 1 --picturedir "$boost_one_picture_dir"
 
