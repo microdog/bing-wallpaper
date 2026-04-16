@@ -45,6 +45,20 @@ actual:  $haystack"
     pass_check
 }
 
+assert_not_contains() {
+    local needle="$1"
+    local haystack="$2"
+    local message="$3"
+
+    if [[ "$haystack" == *"$needle"* ]]; then
+        fail "$message
+unexpected: $needle
+actual:     $haystack"
+    fi
+
+    pass_check
+}
+
 assert_file_exists() {
     local path="$1"
     local message="$2"
@@ -189,7 +203,20 @@ mkdir -p "$TEST_TMPDIR/bin"
 make_curl_stub "$TEST_TMPDIR/bin/curl-stub"
 cat >"$TEST_TMPDIR/bin/osascript-stub" <<'EOF'
 #!/usr/bin/env bash
-cat >"$OSASCRIPT_STUB_LOG"
+
+set -eu
+
+{
+    printf 'ARGC=%s\n' "$#"
+    arg_index=0
+    for arg in "$@"; do
+        printf 'ARGV[%d]=%s\n' "$arg_index" "$arg"
+        arg_index=$((arg_index + 1))
+    done
+    printf 'STDIN:\n'
+    cat
+} >"$OSASCRIPT_STUB_LOG"
+
 exit 0
 EOF
 chmod +x "$TEST_TMPDIR/bin/osascript-stub"
@@ -336,6 +363,21 @@ if ! run_cli_with_path "$TEST_TMPDIR/fake-darwin" "$simulated_wallpaper_stdout" 
 fi
 assert_eq "" "$(cat "$simulated_wallpaper_stderr")" "Darwin-simulated wallpaper request should not write to stderr"
 assert_contains "$simulated_wallpaper_dir/OHR.SampleAlpha_1920x1080.jpg" "$(cat "$OSASCRIPT_STUB_LOG")" "boosted wallpaper target should remain the newest image"
+
+quoted_wallpaper_dir="$TEST_TMPDIR/quoted-\"wallpaper"
+quoted_wallpaper_stdout="$TEST_TMPDIR/quoted-wallpaper.stdout"
+quoted_wallpaper_stderr="$TEST_TMPDIR/quoted-wallpaper.stderr"
+quoted_wallpaper_path="$quoted_wallpaper_dir/OHR.SampleAlpha_1920x1080.jpg"
+: >"$OSASCRIPT_STUB_LOG"
+if ! run_cli_with_path "$TEST_TMPDIR/fake-darwin" "$quoted_wallpaper_stdout" "$quoted_wallpaper_stderr" --set-wallpaper --picturedir "$quoted_wallpaper_dir" --boost 1; then
+    fail "Darwin-simulated quoted wallpaper request should succeed"
+fi
+assert_eq "" "$(cat "$quoted_wallpaper_stderr")" "Darwin-simulated quoted wallpaper request should not write to stderr"
+assert_file_exists "$quoted_wallpaper_path" "Darwin-simulated quoted wallpaper request should download the image"
+assert_contains "ARGV[0]=--" "$(cat "$OSASCRIPT_STUB_LOG")" "quoted wallpaper path should be passed after the osascript argument separator"
+assert_contains "ARGV[1]=$quoted_wallpaper_path" "$(cat "$OSASCRIPT_STUB_LOG")" "quoted wallpaper path should be passed as a distinct osascript argv entry"
+assert_contains "item 1 of argv" "$(cat "$OSASCRIPT_STUB_LOG")" "quoted wallpaper path should be read from AppleScript argv"
+assert_not_contains "set picture of every desktop to (\"$quoted_wallpaper_path\" as POSIX file as alias)" "$(cat "$OSASCRIPT_STUB_LOG")" "quoted wallpaper path should not be interpolated into the AppleScript source"
 
 : >"$CURL_STUB_LOG"
 state_tracking_stdout="$TEST_TMPDIR/state-tracking.stdout"

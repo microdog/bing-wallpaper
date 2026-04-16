@@ -262,8 +262,10 @@ set_macos_wallpaper() {
         return 1
     fi
 
-    "$OSASCRIPT_BIN" <<EOF
-tell application "System Events" to set picture of every desktop to ("$picture_path" as POSIX file as alias)
+    "$OSASCRIPT_BIN" -- "$picture_path" <<'EOF'
+on run argv
+tell application "System Events" to set picture of every desktop to (POSIX file (item 1 of argv) as alias)
+end run
 EOF
 }
 
