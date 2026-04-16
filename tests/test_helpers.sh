@@ -68,6 +68,14 @@ assert_file_exists() {
     pass_check
 }
 
+assert_file_absent() {
+    local path="$1"
+    local message="$2"
+
+    [[ ! -e "$path" ]] || fail "$message ($path)"
+    pass_check
+}
+
 run_random_helper() {
     local run_dir="$1"
     shift
@@ -96,6 +104,27 @@ set -eu
 
 metadata_payload=${CURL_STUB_METADATA_PAYLOAD:?}
 
+emit_metadata_payload() {
+    local requested_count="$1"
+    local payload
+    local image_object
+    local emitted_count=0
+
+    payload=$(tr -d '\n\r' <"$metadata_payload")
+
+    printf '{"images":['
+    while [[ "$emitted_count" -lt "$requested_count" && "$payload" =~ (\{[^{}]*\"url\"[^{}]*\}) ]]; do
+        image_object="${BASH_REMATCH[1]}"
+        if [[ "$emitted_count" -gt 0 ]]; then
+            printf ','
+        fi
+        printf '%s' "$image_object"
+        emitted_count=$((emitted_count + 1))
+        payload="${payload#*"$image_object"}"
+    done
+    printf ']}\n'
+}
+
 out_file=
 url=
 while [[ $# -gt 0 ]]; do
@@ -116,7 +145,11 @@ done
 
 case "$url" in
     *HPImageArchive.aspx*)
-        cat "$metadata_payload"
+        requested_count=1
+        if [[ "$url" =~ [\?\&]n=([0-9]+) ]]; then
+            requested_count="${BASH_REMATCH[1]}"
+        fi
+        emit_metadata_payload "$requested_count"
         ;;
     *)
         if [[ -z "$out_file" ]]; then
@@ -193,6 +226,17 @@ expected_target="$picture_dir/OHR.SampleAlpha_1920x1080.jpg"
 assert_eq "$expected_target" "$today_target" "today.jpg should point to the downloaded image"
 assert_eq "$expected_target" "$random_target" "random.jpg should fall back to today's image when no alternate image exists"
 
+boost_one_picture_dir="$TEST_TMPDIR/pictures boost one"
+run_random_helper_with_payload "$FIXTURE_PATH" "$ROOT_DIR" --quiet --boost 1 --picturedir "$boost_one_picture_dir"
+
+boost_one_today_target=$(readlink "$boost_one_picture_dir/today.jpg")
+boost_one_random_target=$(readlink "$boost_one_picture_dir/random.jpg")
+boost_one_expected_target="$boost_one_picture_dir/OHR.SampleAlpha_1920x1080.jpg"
+
+assert_eq "$boost_one_expected_target" "$boost_one_today_target" "boost 1 should keep today.jpg on the newest image"
+assert_eq "$boost_one_expected_target" "$boost_one_random_target" "boost 1 should keep random.jpg on the only downloaded image"
+assert_file_absent "$boost_one_picture_dir/OHR.SampleBeta_1920x1080.jpg" "boost 1 should not download older helper images"
+
 dash_run_dir="$TEST_TMPDIR/dash helper run"
 mkdir -p "$dash_run_dir"
 run_random_helper_with_payload "$single_image_payload" "$dash_run_dir" --quiet --picturedir -dashdir
@@ -211,10 +255,10 @@ run_random_helper_with_payload "$FIXTURE_PATH" "$ROOT_DIR" --quiet --boost 2 --p
 
 alternate_today_target=$(readlink "$alternate_picture_dir/today.jpg")
 alternate_random_target=$(readlink "$alternate_picture_dir/random.jpg")
-alternate_today_expected="$alternate_picture_dir/OHR.SampleBeta_1920x1080.jpg"
-alternate_random_expected="$alternate_picture_dir/OHR.SampleAlpha_1920x1080.jpg"
+alternate_today_expected="$alternate_picture_dir/OHR.SampleAlpha_1920x1080.jpg"
+alternate_random_expected="$alternate_picture_dir/OHR.SampleBeta_1920x1080.jpg"
 
-assert_eq "$alternate_today_expected" "$alternate_today_target" "today.jpg should point to the latest downloaded image when alternates exist"
+assert_eq "$alternate_today_expected" "$alternate_today_target" "today.jpg should point to the newest downloaded image when alternates exist"
 assert_eq "$alternate_random_expected" "$alternate_random_target" "random.jpg should point to a non-today wallpaper when alternates exist"
 assert_file_exists "$alternate_picture_dir/OHR.SampleAlpha_1920x1080.jpg" "alternate wallpaper candidate should exist on disk"
 assert_file_exists "$alternate_picture_dir/random.jpg" "random.jpg symlink should resolve when alternates exist"

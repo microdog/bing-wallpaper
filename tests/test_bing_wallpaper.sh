@@ -81,12 +81,33 @@ log_file=${CURL_STUB_LOG:?}
 metadata_payload=${CURL_STUB_METADATA_PAYLOAD:?}
 download_mode=${CURL_STUB_DOWNLOAD_MODE:-success}
 
+emit_metadata_payload() {
+    local requested_count="$1"
+    local payload
+    local image_object
+    local emitted_count=0
+
+    payload=$(tr -d '\n\r' <"$metadata_payload")
+
+    printf '{"images":['
+    while [[ "$emitted_count" -lt "$requested_count" && "$payload" =~ (\{[^{}]*\"url\"[^{}]*\}) ]]; do
+        image_object="${BASH_REMATCH[1]}"
+        if [[ "$emitted_count" -gt 0 ]]; then
+            printf ','
+        fi
+        printf '%s' "$image_object"
+        emitted_count=$((emitted_count + 1))
+        payload="${payload#*"$image_object"}"
+    done
+    printf ']}\n'
+}
+
 printf '%s\n' "$*" >>"$log_file"
 
-    out_file=
-    url=
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
+out_file=
+url=
+while [[ $# -gt 0 ]]; do
+    case "$1" in
         -o|--output|-Lo|-OL|-LO)
             out_file="$2"
             shift 2
@@ -103,7 +124,11 @@ done
 
 case "$url" in
     *HPImageArchive.aspx*)
-        cat "$metadata_payload"
+        requested_count=1
+        if [[ "$url" =~ [\?\&]n=([0-9]+) ]]; then
+            requested_count="${BASH_REMATCH[1]}"
+        fi
+        emit_metadata_payload "$requested_count"
         ;;
     *)
         if [[ -z "${out_file}" ]]; then
@@ -131,6 +156,18 @@ run_cli() {
         bash "$SCRIPT_PATH" "$@" >"$stdout_file" 2>"$stderr_file"
 }
 
+run_cli_with_path() {
+    local path_prefix="$1"
+    local stdout_file="$2"
+    local stderr_file="$3"
+    shift 3
+
+    PATH="$path_prefix:$PATH" \
+        BING_WALLPAPER_CURL_BIN="$TEST_TMPDIR/bin/curl-stub" \
+        BING_WALLPAPER_OSASCRIPT_BIN="$TEST_TMPDIR/bin/osascript-stub" \
+        bash "$SCRIPT_PATH" "$@" >"$stdout_file" 2>"$stderr_file"
+}
+
 run_cli_in_dir() {
     local run_dir="$1"
     local stdout_file="$2"
@@ -152,16 +189,25 @@ mkdir -p "$TEST_TMPDIR/bin"
 make_curl_stub "$TEST_TMPDIR/bin/curl-stub"
 cat >"$TEST_TMPDIR/bin/osascript-stub" <<'EOF'
 #!/usr/bin/env bash
+cat >"$OSASCRIPT_STUB_LOG"
 exit 0
 EOF
 chmod +x "$TEST_TMPDIR/bin/osascript-stub"
+mkdir -p "$TEST_TMPDIR/fake-darwin"
+cat >"$TEST_TMPDIR/fake-darwin/uname" <<'EOF'
+#!/usr/bin/env bash
+printf 'Darwin\n'
+EOF
+chmod +x "$TEST_TMPDIR/fake-darwin/uname"
 
 HOME="$TEST_TMPDIR/home"
 mkdir -p "$HOME"
 CURL_STUB_LOG="$TEST_TMPDIR/curl.log"
+OSASCRIPT_STUB_LOG="$TEST_TMPDIR/osascript.log"
 : >"$CURL_STUB_LOG"
+: >"$OSASCRIPT_STUB_LOG"
 CURL_STUB_METADATA_PAYLOAD="$FIXTURE_PATH"
-export HOME CURL_STUB_LOG CURL_STUB_METADATA_PAYLOAD
+export HOME CURL_STUB_LOG CURL_STUB_METADATA_PAYLOAD OSASCRIPT_STUB_LOG
 
 HOST_OS=$(uname -s)
 
@@ -223,6 +269,13 @@ run_cli "$success_stdout" "$success_stderr" --picturedir "$picturedir" --boost 2
 assert_file_exists "$picturedir/OHR.SampleAlpha_1920x1080.jpg" "successful download should create first image"
 assert_file_exists "$picturedir/OHR.SampleBeta_1920x1080.jpg" "successful download should create second image"
 
+boost_one_dir="$TEST_TMPDIR/boost-one-pictures"
+boost_one_stdout="$TEST_TMPDIR/boost-one.stdout"
+boost_one_stderr="$TEST_TMPDIR/boost-one.stderr"
+run_cli "$boost_one_stdout" "$boost_one_stderr" --picturedir "$boost_one_dir" --boost 1
+assert_file_exists "$boost_one_dir/OHR.SampleAlpha_1920x1080.jpg" "boost 1 should download the newest image"
+assert_file_absent "$boost_one_dir/OHR.SampleBeta_1920x1080.jpg" "boost 1 should not download older images"
+
 dash_filename_stdout="$TEST_TMPDIR/dash-filename.stdout"
 dash_filename_stderr="$TEST_TMPDIR/dash-filename.stderr"
 run_cli "$dash_filename_stdout" "$dash_filename_stderr" --picturedir "$TEST_TMPDIR/dash-pictures" --filename -dash.jpg --boost 1
@@ -256,13 +309,23 @@ if [[ "$HOST_OS" = 'Darwin' ]]; then
         fail "set-wallpaper should succeed on Darwin hosts"
     fi
     assert_eq "" "$(cat "$wallpaper_stderr")" "Darwin wallpaper request should not write to stderr"
-    assert_file_exists "$picturedir/OHR.SampleBeta_1920x1080.jpg" "Darwin wallpaper request should leave the downloaded file in place"
+    assert_file_exists "$picturedir/OHR.SampleAlpha_1920x1080.jpg" "Darwin wallpaper request should leave the downloaded file in place"
 else
     if run_cli "$wallpaper_stdout" "$wallpaper_stderr" --set-wallpaper --picturedir "$picturedir"; then
         fail "set-wallpaper should fail on non-macOS hosts"
     fi
     assert_eq "Setting wallpaper is only supported on macOS." "$(cat "$wallpaper_stderr")" "non-macOS wallpaper request should fail with the exact required stderr"
 fi
+
+simulated_wallpaper_dir="$TEST_TMPDIR/simulated-wallpaper"
+simulated_wallpaper_stdout="$TEST_TMPDIR/simulated-wallpaper.stdout"
+simulated_wallpaper_stderr="$TEST_TMPDIR/simulated-wallpaper.stderr"
+: >"$OSASCRIPT_STUB_LOG"
+if ! run_cli_with_path "$TEST_TMPDIR/fake-darwin" "$simulated_wallpaper_stdout" "$simulated_wallpaper_stderr" --set-wallpaper --picturedir "$simulated_wallpaper_dir" --boost 2; then
+    fail "Darwin-simulated set-wallpaper should succeed"
+fi
+assert_eq "" "$(cat "$simulated_wallpaper_stderr")" "Darwin-simulated wallpaper request should not write to stderr"
+assert_contains "$simulated_wallpaper_dir/OHR.SampleAlpha_1920x1080.jpg" "$(cat "$OSASCRIPT_STUB_LOG")" "boosted wallpaper target should remain the newest image"
 
 : >"$CURL_STUB_LOG"
 state_tracking_stdout="$TEST_TMPDIR/state-tracking.stdout"
@@ -274,13 +337,13 @@ if [[ "$HOST_OS" = 'Darwin' ]]; then
         fail "sourced run_bing_wallpaper should succeed on Darwin hosts"
     fi
     assert_eq "" "$(cat "$state_tracking_stderr")" "Darwin sourced wallpaper request should not write to stderr"
-    assert_file_exists "$TEST_TMPDIR/state-pictures/OHR.SampleBeta_1920x1080.jpg" "Darwin sourced wallpaper request should leave the downloaded file in place"
+    assert_file_exists "$TEST_TMPDIR/state-pictures/OHR.SampleAlpha_1920x1080.jpg" "Darwin sourced wallpaper request should leave the downloaded file in place"
 else
     if run_bing_wallpaper --picturedir "$TEST_TMPDIR/state-pictures" --set-wallpaper --boost 1 >"$state_tracking_stdout" 2>"$state_tracking_stderr"; then
         fail "sourced run_bing_wallpaper should fail when wallpaper setting is unsupported"
     fi
-    assert_eq "$TEST_TMPDIR/state-pictures/OHR.SampleBeta_1920x1080.jpg" "$LAST_DOWNLOADED_FILE" "post-download failure should preserve LAST_DOWNLOADED_FILE"
-    assert_eq "OHR.SampleBeta_1920x1080.jpg" "$LAST_FILENAME" "post-download failure should preserve LAST_FILENAME"
+    assert_eq "$TEST_TMPDIR/state-pictures/OHR.SampleAlpha_1920x1080.jpg" "$LAST_DOWNLOADED_FILE" "post-download failure should preserve LAST_DOWNLOADED_FILE"
+    assert_eq "OHR.SampleAlpha_1920x1080.jpg" "$LAST_FILENAME" "post-download failure should preserve LAST_FILENAME"
 fi
 
 printf 'PASS test_bing_wallpaper (%d checks)\n' "$CHECKS"

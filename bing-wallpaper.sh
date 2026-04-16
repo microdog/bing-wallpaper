@@ -66,6 +66,10 @@ reset_state() {
     PROTO='http'
     CURL_BIN="${BING_WALLPAPER_CURL_BIN:-curl}"
     OSASCRIPT_BIN="${BING_WALLPAPER_OSASCRIPT_BIN:-/usr/bin/osascript}"
+    CURRENT_DOWNLOADED_FILE=''
+    CURRENT_FILENAME=''
+    # LAST_DOWNLOADED_FILE is tracked state surfaced to callers after the subshell exits.
+    # shellcheck disable=SC2034
     LAST_DOWNLOADED_FILE=''
     LAST_FILENAME=''
 }
@@ -267,6 +271,7 @@ run_bing_wallpaper_impl() {
     local metadata_payload
     local image_url
     local filename
+    local target_path
     local found_urls='0'
 
     reset_state
@@ -299,7 +304,13 @@ run_bing_wallpaper_impl() {
             filename=$(derive_filename_from_url "$image_url")
         fi
 
-        download_image "$image_url" "${PICTURE_DIR%/}/$filename" "$filename" || return 1
+        target_path="${PICTURE_DIR%/}/$filename"
+        download_image "$image_url" "$target_path" "$filename" || return 1
+
+        if [[ -z "$CURRENT_DOWNLOADED_FILE" ]]; then
+            CURRENT_DOWNLOADED_FILE="$target_path"
+            CURRENT_FILENAME="$filename"
+        fi
     done < <(extract_image_urls_from_payload "$metadata_payload" "$RESOLUTION" "$PROTO")
 
     if [[ "$found_urls" != '1' ]]; then
@@ -307,7 +318,7 @@ run_bing_wallpaper_impl() {
     fi
 
     if [[ -n "$SET_WALLPAPER" ]]; then
-        set_macos_wallpaper "$LAST_DOWNLOADED_FILE" || return 1
+        set_macos_wallpaper "$CURRENT_DOWNLOADED_FILE" || return 1
     fi
 }
 
@@ -316,6 +327,12 @@ run_bing_wallpaper() {
     local state_file
     local status
 
+    CURRENT_DOWNLOADED_FILE=''
+    # CURRENT_FILENAME is tracked state surfaced to callers after the subshell exits.
+    # shellcheck disable=SC2034
+    CURRENT_FILENAME=''
+    # LAST_DOWNLOADED_FILE is tracked state surfaced to callers after the subshell exits.
+    # shellcheck disable=SC2034
     LAST_DOWNLOADED_FILE=''
     # LAST_FILENAME is tracked state surfaced to callers after the subshell exits.
     # shellcheck disable=SC2034
@@ -329,6 +346,8 @@ run_bing_wallpaper() {
         source "$script_path"
         trap '"'"'
             {
+                printf "CURRENT_DOWNLOADED_FILE=%q\n" "$CURRENT_DOWNLOADED_FILE"
+                printf "CURRENT_FILENAME=%q\n" "$CURRENT_FILENAME"
                 printf "LAST_DOWNLOADED_FILE=%q\n" "$LAST_DOWNLOADED_FILE"
                 printf "LAST_FILENAME=%q\n" "$LAST_FILENAME"
             } >"$BING_WALLPAPER_STATE_FILE"

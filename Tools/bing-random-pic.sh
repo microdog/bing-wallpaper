@@ -39,11 +39,13 @@ BING_WALLPAPER_SCRIPT_NAME=$(basename "$0")
 export BING_WALLPAPER_SCRIPT_NAME
 run_bing_wallpaper "$@"
 
-if [[ -z "${LAST_DOWNLOADED_FILE:-}" ]]; then
+current_downloaded_file=${CURRENT_DOWNLOADED_FILE:-${LAST_DOWNLOADED_FILE:-}}
+
+if [[ -z "$current_downloaded_file" ]]; then
     exit 0
 fi
 
-downloaded_file=$(resolve_absolute_path "$LAST_DOWNLOADED_FILE")
+downloaded_file=$(resolve_absolute_path "$current_downloaded_file")
 picture_dir=$(dirname -- "$downloaded_file")
 today_link="$picture_dir/today.jpg"
 random_link="$picture_dir/random.jpg"
