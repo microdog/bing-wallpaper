@@ -138,7 +138,7 @@ run_cli_in_dir() {
     shift 3
 
     (
-        cd "$run_dir"
+        cd "$run_dir" || exit 1
         BING_WALLPAPER_CURL_BIN="$TEST_TMPDIR/bin/curl-stub" \
             BING_WALLPAPER_OSASCRIPT_BIN="$TEST_TMPDIR/bin/osascript-stub" \
             bash "$SCRIPT_PATH" "$@" >"$stdout_file" 2>"$stderr_file"
@@ -163,6 +163,9 @@ CURL_STUB_LOG="$TEST_TMPDIR/curl.log"
 CURL_STUB_METADATA_PAYLOAD="$FIXTURE_PATH"
 export HOME CURL_STUB_LOG CURL_STUB_METADATA_PAYLOAD
 
+HOST_OS=$(uname -s)
+
+# shellcheck source=../bing-wallpaper.sh disable=SC1091
 source "$SCRIPT_PATH"
 
 payload=$(cat "$FIXTURE_PATH")
@@ -247,20 +250,37 @@ assert_file_absent "$TEST_TMPDIR/fail-pictures/failing.jpg" "failed download sho
 unset CURL_STUB_DOWNLOAD_MODE
 
 wallpaper_stderr="$TEST_TMPDIR/wallpaper.stderr"
-if run_cli "$TEST_TMPDIR/wallpaper.stdout" "$wallpaper_stderr" --set-wallpaper --picturedir "$picturedir"; then
-    fail "set-wallpaper should fail on non-macOS hosts"
+wallpaper_stdout="$TEST_TMPDIR/wallpaper.stdout"
+if [[ "$HOST_OS" = 'Darwin' ]]; then
+    if ! run_cli "$wallpaper_stdout" "$wallpaper_stderr" --set-wallpaper --picturedir "$picturedir"; then
+        fail "set-wallpaper should succeed on Darwin hosts"
+    fi
+    assert_eq "" "$(cat "$wallpaper_stderr")" "Darwin wallpaper request should not write to stderr"
+    assert_file_exists "$picturedir/OHR.SampleBeta_1920x1080.jpg" "Darwin wallpaper request should leave the downloaded file in place"
+else
+    if run_cli "$wallpaper_stdout" "$wallpaper_stderr" --set-wallpaper --picturedir "$picturedir"; then
+        fail "set-wallpaper should fail on non-macOS hosts"
+    fi
+    assert_eq "Setting wallpaper is only supported on macOS." "$(cat "$wallpaper_stderr")" "non-macOS wallpaper request should fail with the exact required stderr"
 fi
-assert_eq "Setting wallpaper is only supported on macOS." "$(cat "$wallpaper_stderr")" "non-macOS wallpaper request should fail with the exact required stderr"
 
 : >"$CURL_STUB_LOG"
 state_tracking_stdout="$TEST_TMPDIR/state-tracking.stdout"
 state_tracking_stderr="$TEST_TMPDIR/state-tracking.stderr"
 export BING_WALLPAPER_CURL_BIN="$TEST_TMPDIR/bin/curl-stub"
 export BING_WALLPAPER_OSASCRIPT_BIN="$TEST_TMPDIR/bin/osascript-stub"
-if run_bing_wallpaper --picturedir "$TEST_TMPDIR/state-pictures" --set-wallpaper --boost 1 >"$state_tracking_stdout" 2>"$state_tracking_stderr"; then
-    fail "sourced run_bing_wallpaper should fail when wallpaper setting is unsupported"
+if [[ "$HOST_OS" = 'Darwin' ]]; then
+    if ! run_bing_wallpaper --picturedir "$TEST_TMPDIR/state-pictures" --set-wallpaper --boost 1 >"$state_tracking_stdout" 2>"$state_tracking_stderr"; then
+        fail "sourced run_bing_wallpaper should succeed on Darwin hosts"
+    fi
+    assert_eq "" "$(cat "$state_tracking_stderr")" "Darwin sourced wallpaper request should not write to stderr"
+    assert_file_exists "$TEST_TMPDIR/state-pictures/OHR.SampleBeta_1920x1080.jpg" "Darwin sourced wallpaper request should leave the downloaded file in place"
+else
+    if run_bing_wallpaper --picturedir "$TEST_TMPDIR/state-pictures" --set-wallpaper --boost 1 >"$state_tracking_stdout" 2>"$state_tracking_stderr"; then
+        fail "sourced run_bing_wallpaper should fail when wallpaper setting is unsupported"
+    fi
+    assert_eq "$TEST_TMPDIR/state-pictures/OHR.SampleBeta_1920x1080.jpg" "$LAST_DOWNLOADED_FILE" "post-download failure should preserve LAST_DOWNLOADED_FILE"
+    assert_eq "OHR.SampleBeta_1920x1080.jpg" "$LAST_FILENAME" "post-download failure should preserve LAST_FILENAME"
 fi
-assert_eq "$TEST_TMPDIR/state-pictures/OHR.SampleBeta_1920x1080.jpg" "$LAST_DOWNLOADED_FILE" "post-download failure should preserve LAST_DOWNLOADED_FILE"
-assert_eq "OHR.SampleBeta_1920x1080.jpg" "$LAST_FILENAME" "post-download failure should preserve LAST_FILENAME"
 
 printf 'PASS test_bing_wallpaper (%d checks)\n' "$CHECKS"

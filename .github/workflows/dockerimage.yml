@@ -35,12 +35,10 @@ jobs:
 
       - name: Run shellcheck
         run: |
-          # tests/test_bing_wallpaper.sh stays in bash -n and regression coverage.
-          # It is intentionally excluded from shellcheck in this workflow because
-          # this task only changes workflow/docs, not the test file itself.
           shellcheck bing-wallpaper.sh \
             Tools/bing-random-pic.sh \
             Tools/gnome-bing-slideshow/deploy-gnome-settings.sh \
+            tests/test_bing_wallpaper.sh \
             tests/test_helpers.sh
 
       - name: Run regression tests
