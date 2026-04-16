@@ -94,6 +94,8 @@ set -eu
 log_file=${CURL_STUB_LOG:?}
 metadata_payload=${CURL_STUB_METADATA_PAYLOAD:?}
 download_mode=${CURL_STUB_DOWNLOAD_MODE:-success}
+request_args=$*
+saw_fail=0
 
 emit_metadata_payload() {
     local requested_count="$1"
@@ -126,6 +128,10 @@ while [[ $# -gt 0 ]]; do
             out_file="$2"
             shift 2
             ;;
+        -f|--fail)
+            saw_fail=1
+            shift
+            ;;
         -L|-s|-S|-f)
             shift
             ;;
@@ -148,6 +154,13 @@ case "$url" in
         if [[ -z "${out_file}" ]]; then
             printf 'missing output file\n' >&2
             exit 91
+        fi
+        if [[ "$download_mode" = "http-error-body" ]]; then
+            printf '<html>404</html>\n' >"$out_file"
+            if [[ "$saw_fail" -eq 1 ]]; then
+                exit 22
+            fi
+            exit 0
         fi
         if [[ "$download_mode" = "fail" ]]; then
             printf 'partial download' >"$out_file"
@@ -347,6 +360,15 @@ if run_cli "$failure_stdout" "$failure_stderr" --picturedir "$TEST_TMPDIR/fail-p
     fail "failed download should return non-zero"
 fi
 assert_file_absent "$TEST_TMPDIR/fail-pictures/failing.jpg" "failed download should remove partial file"
+unset CURL_STUB_DOWNLOAD_MODE
+
+export CURL_STUB_DOWNLOAD_MODE=http-error-body
+http_error_stdout="$TEST_TMPDIR/http-error.stdout"
+http_error_stderr="$TEST_TMPDIR/http-error.stderr"
+if run_cli "$http_error_stdout" "$http_error_stderr" --picturedir "$TEST_TMPDIR/http-error-pictures" --filename bad-http.jpg; then
+    fail "HTTP error body download should fail"
+fi
+assert_file_absent "$TEST_TMPDIR/http-error-pictures/bad-http.jpg" "HTTP error body download should remove the target file"
 unset CURL_STUB_DOWNLOAD_MODE
 
 wallpaper_stderr="$TEST_TMPDIR/wallpaper.stderr"

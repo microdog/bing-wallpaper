@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE wallpapers SYSTEM "gnome-wp-list.dtd">
 <wallpapers>
+  <!-- Sample template only. deploy-gnome-settings.sh writes the installed copy
+       to the current user's GNOME background properties directory. -->
   <wallpaper>
     <name>Bing's today wallpaper.</name>
-    <filename>.local/share/background/slideshows/bing-today.xml</filename>
+    <filename>__BING_WALLPAPER_SLIDESHOW_XML__</filename>
     <options>zoom</options>
     <pcolor>#2c001e</pcolor>
     <scolor>#2c001e</scolor>

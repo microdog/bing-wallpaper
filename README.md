@@ -64,7 +64,7 @@ On macOS, the maintained workflow is:
 A sample LaunchAgent plist is provided at
 `Tools/com.ideasftw.bing-wallpaper.plist`. Copy it to
 `$HOME/Library/LaunchAgents/`, update the script path to match your local
-checkout, and load it:
+checkout and preferred picture directory, and load it:
 
 ```bash
 cp Tools/com.ideasftw.bing-wallpaper.plist "$HOME/Library/LaunchAgents/"
@@ -74,6 +74,12 @@ launchctl bootstrap "gui/$(id -u)" \
 
 If you prefer to rotate through the downloaded directory in System Settings,
 point Wallpaper at your chosen picture directory.
+
+`Tools/Bing Wallpaper.app` is kept as a legacy Automator sample. It now points
+at checkout-based placeholder paths, but you still need to edit those embedded
+paths before use. Its bundled Automator `Application Stub` is an old x86_64
+binary, so Apple Silicon systems may require Rosetta if you choose to keep
+using that bundle.
 
 GNOME Linux
 -----------
@@ -88,16 +94,18 @@ The GNOME helper workflow is:
    the current image and refreshes the `today.jpg` and `random.jpg` symlinks
    for GNOME
 3. Run `Tools/gnome-bing-slideshow/deploy-gnome-settings.sh` once per user to
-   install the slideshow XML files into `~/.local/share/`
+   install slideshow XML files into `~/.local/share/`, optionally with
+   `--picturedir` if you are not using the default download directory
 4. In GNOME Settings, choose the installed Bing slideshow background
 
 Example setup:
 
 ```bash
 bash Tools/bing-random-pic.sh --picturedir "$HOME/Pictures/bing-wallpapers"
-bash Tools/gnome-bing-slideshow/deploy-gnome-settings.sh
+bash Tools/gnome-bing-slideshow/deploy-gnome-settings.sh \
+  --picturedir "$HOME/Pictures/bing-wallpapers"
 ```
 
 To automate downloads or helper refreshes, use your preferred scheduler. The
 repository includes `Tools/bing-cron` as a cron example that you can adapt to
-your local paths.
+your local checkout path and preferred picture directory.

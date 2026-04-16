@@ -242,6 +242,8 @@ download_image() {
 
     print_message "Downloading: $filename..."
 
+    curl_args+=(-f)
+
     if [[ -n "$QUIET" ]]; then
         curl_args+=(-s)
     fi

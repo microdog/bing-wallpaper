@@ -127,6 +127,8 @@ make_curl_stub() {
 set -eu
 
 metadata_payload=${CURL_STUB_METADATA_PAYLOAD:?}
+download_mode=${CURL_STUB_DOWNLOAD_MODE:-success}
+saw_fail=0
 
 emit_metadata_payload() {
     local requested_count="$1"
@@ -157,6 +159,10 @@ while [[ $# -gt 0 ]]; do
             out_file="$2"
             shift 2
             ;;
+        -f|--fail)
+            saw_fail=1
+            shift
+            ;;
         -L|-s|-S|-f)
             shift
             ;;
@@ -179,6 +185,13 @@ case "$url" in
         if [[ -z "$out_file" ]]; then
             printf 'missing output file\n' >&2
             exit 91
+        fi
+        if [[ "$download_mode" = "http-error-body" ]]; then
+            printf '<html>404</html>\n' >"$out_file"
+            if [[ "$saw_fail" -eq 1 ]]; then
+                exit 22
+            fi
+            exit 0
         fi
         printf 'image-bytes:%s\n' "$url" >"$out_file"
         ;;
@@ -205,7 +218,7 @@ trap 'rm -rf "$TEST_TMPDIR"' EXIT
 mkdir -p "$TEST_TMPDIR/bin"
 make_curl_stub "$TEST_TMPDIR/bin/curl-stub"
 
-HOME="$TEST_TMPDIR/home with spaces"
+HOME="$TEST_TMPDIR/home & spaces"
 mkdir -p "$HOME"
 export HOME
 
@@ -288,6 +301,16 @@ assert_status_eq 0 "$slow_custom_status" "slow extractor helper run should still
 assert_eq "" "$(cat "$slow_custom_stderr")" "slow extractor helper run should not leak broken-pipe stderr"
 assert_eq "image-bytes:http://www.bing.com/th?id=OHR.SampleAlpha_1920x1080.jpg&pid=hp" "$(cat "$slow_custom_picture_dir/custom.jpg")" "slow extractor helper run should keep the first custom-filename download"
 
+http_error_helper_dir="$TEST_TMPDIR/http-error-helper"
+http_error_helper_stdout="$TEST_TMPDIR/http-error-helper.stdout"
+http_error_helper_stderr="$TEST_TMPDIR/http-error-helper.stderr"
+if CURL_STUB_DOWNLOAD_MODE=http-error-body run_random_helper_with_payload "$single_image_payload" "$ROOT_DIR" --quiet --picturedir "$http_error_helper_dir" >"$http_error_helper_stdout" 2>"$http_error_helper_stderr"; then
+    fail "helper should fail on HTTP error body downloads"
+fi
+assert_file_absent "$http_error_helper_dir/today.jpg" "helper should not link today.jpg after an HTTP error body"
+assert_file_absent "$http_error_helper_dir/random.jpg" "helper should not link random.jpg after an HTTP error body"
+assert_file_absent "$http_error_helper_dir/OHR.SampleAlpha_1920x1080.jpg" "helper should clean up the failed HTTP error body target"
+
 dash_run_dir="$TEST_TMPDIR/dash helper run"
 mkdir -p "$dash_run_dir"
 run_random_helper_with_payload "$single_image_payload" "$dash_run_dir" --quiet --picturedir -dashdir
@@ -318,5 +341,29 @@ bash "$GNOME_HELPER"
 
 assert_file_exists "$HOME/.local/share/gnome-background-properties/bing-slideshow.xml" "deploy helper should copy the GNOME background properties XML"
 assert_file_exists "$HOME/.local/share/background/slideshows/bing-today.xml" "deploy helper should copy the slideshow XML"
+
+custom_gnome_picture_dir="$TEST_TMPDIR/custom gnome wallpapers"
+bash "$GNOME_HELPER" --picturedir "$custom_gnome_picture_dir"
+
+custom_slideshow_path="$HOME/.local/share/background/slideshows/bing-today.xml"
+custom_properties_path="$HOME/.local/share/gnome-background-properties/bing-slideshow.xml"
+assert_eq "$custom_gnome_picture_dir/today.jpg" "$(xmllint --xpath 'string(/background/static[1]/file)' "$custom_slideshow_path")" "deploy helper should point today.jpg at the requested picture directory"
+assert_eq "$custom_gnome_picture_dir/random.jpg" "$(xmllint --xpath 'string(/background/static[2]/file)' "$custom_slideshow_path")" "deploy helper should point random.jpg at the requested picture directory"
+assert_eq "$custom_slideshow_path" "$(xmllint --xpath 'string(/wallpapers/wallpaper/filename)' "$custom_properties_path")" "deploy helper should point the GNOME properties XML at the installed slideshow XML"
+
+escaped_gnome_picture_dir="$TEST_TMPDIR/custom & gnome <wallpapers>"
+bash "$GNOME_HELPER" --picturedir "$escaped_gnome_picture_dir"
+
+assert_eq "$escaped_gnome_picture_dir/today.jpg" "$(xmllint --xpath 'string(/background/static[1]/file)' "$custom_slideshow_path")" "deploy helper should preserve today.jpg after XML parsing for escaped paths"
+assert_eq "$escaped_gnome_picture_dir/random.jpg" "$(xmllint --xpath 'string(/background/static[2]/file)' "$custom_slideshow_path")" "deploy helper should preserve random.jpg after XML parsing for escaped paths"
+assert_eq "$custom_slideshow_path" "$(xmllint --xpath 'string(/wallpapers/wallpaper/filename)' "$custom_properties_path")" "deploy helper should keep the properties XML valid for escaped paths"
+
+invalid_xml_picture_dir="$TEST_TMPDIR/invalid"$'\f'"xml"
+invalid_xml_stdout="$TEST_TMPDIR/invalid-xml.stdout"
+invalid_xml_stderr="$TEST_TMPDIR/invalid-xml.stderr"
+if bash "$GNOME_HELPER" --picturedir "$invalid_xml_picture_dir" >"$invalid_xml_stdout" 2>"$invalid_xml_stderr"; then
+    fail "deploy helper should reject XML-unrepresentable picture directories"
+fi
+assert_contains "Path cannot be represented in XML" "$(cat "$invalid_xml_stderr")" "deploy helper should explain XML-unrepresentable picture directories"
 
 printf 'PASS test_helpers (%d checks)\n' "$CHECKS"

@@ -7,7 +7,9 @@
 		<key>ProgramArguments</key>
 		<array>
 			<string>/bin/bash</string>
-			<string>/Users/username/Pictures/bing-wallpaper.sh</string>
+			<string>/path/to/your/bing-wallpaper-checkout/bing-wallpaper.sh</string>
+			<string>--picturedir</string>
+			<string>/path/to/your/bing-wallpaper-checkout/wallpapers</string>
 		</array>
 		<key>LowPriorityIO</key>
 		<true/>
