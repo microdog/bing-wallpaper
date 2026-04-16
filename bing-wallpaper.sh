@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
-
 SCRIPT=$(basename "${BASH_SOURCE[0]}")
 VERSION='0.5.0'
 RESOLUTIONS=(UHD 1920x1200 1920x1080 800x480 400x240)
@@ -258,7 +256,7 @@ tell application "System Events" to set picture of every desktop to ("$picture_p
 EOF
 }
 
-run_bing_wallpaper() {
+run_bing_wallpaper_impl() {
     local metadata_payload
     local image_url
     local filename
@@ -304,6 +302,23 @@ run_bing_wallpaper() {
     if [[ -n "$SET_WALLPAPER" ]]; then
         set_macos_wallpaper "$LAST_DOWNLOADED_FILE" || return 1
     fi
+}
+
+run_bing_wallpaper() {
+    local shell_options
+    local status
+
+    shell_options=$(set +o)
+    set -euo pipefail
+
+    if run_bing_wallpaper_impl "$@"; then
+        status=0
+    else
+        status=$?
+    fi
+
+    eval "$shell_options"
+    return "$status"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

@@ -204,6 +204,6 @@ wallpaper_stderr="$TEST_TMPDIR/wallpaper.stderr"
 if run_cli "$TEST_TMPDIR/wallpaper.stdout" "$wallpaper_stderr" --set-wallpaper --picturedir "$picturedir"; then
     fail "set-wallpaper should fail on non-macOS hosts"
 fi
-assert_contains "Setting wallpaper is only supported on macOS." "$(cat "$wallpaper_stderr")" "non-macOS wallpaper request should fail with a clear error"
+assert_eq "Setting wallpaper is only supported on macOS." "$(cat "$wallpaper_stderr")" "non-macOS wallpaper request should fail with the exact required stderr"
 
 printf 'PASS test_bing_wallpaper (%d checks)\n' "$CHECKS"
