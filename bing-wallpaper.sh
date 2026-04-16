@@ -305,19 +305,33 @@ run_bing_wallpaper_impl() {
 }
 
 run_bing_wallpaper() {
-    local shell_options
+    local script_path
+    local state_file
     local status
 
-    shell_options=$(set +o)
-    set -euo pipefail
+    LAST_DOWNLOADED_FILE=''
+    LAST_FILENAME=''
+    script_path=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")
+    state_file=$(mktemp "${TMPDIR:-/tmp}/bing-wallpaper-state.XXXXXX") || return 1
 
-    if run_bing_wallpaper_impl "$@"; then
+    if BING_WALLPAPER_STATE_FILE="$state_file" bash -euo pipefail -c '
+        script_path=$1
+        shift
+        source "$script_path"
+        run_bing_wallpaper_impl "$@"
+        {
+            printf "LAST_DOWNLOADED_FILE=%q\n" "$LAST_DOWNLOADED_FILE"
+            printf "LAST_FILENAME=%q\n" "$LAST_FILENAME"
+        } >"$BING_WALLPAPER_STATE_FILE"
+    ' bash "$script_path" "$@"; then
         status=0
+        # shellcheck disable=SC1090
+        source "$state_file"
     else
         status=$?
     fi
 
-    eval "$shell_options"
+    rm -f "$state_file"
     return "$status"
 }
 

@@ -178,6 +178,15 @@ if run_cli "$TEST_TMPDIR/invalid-boost.stdout" "$invalid_boost_stderr" --boost n
 fi
 assert_contains "Boost must be a positive integer: nope" "$(cat "$invalid_boost_stderr")" "invalid boost should explain the failure"
 
+: >"$CURL_STUB_LOG"
+blocked_stdout="$TEST_TMPDIR/blocked.stdout"
+blocked_stderr="$TEST_TMPDIR/blocked.stderr"
+if run_cli "$blocked_stdout" "$blocked_stderr" --picturedir /dev/null/blocked --boost 1; then
+    fail "blocked picturedir should fail"
+fi
+assert_eq "" "$(cat "$blocked_stdout")" "blocked picturedir should exit before printing download progress"
+assert_eq "" "$(cat "$CURL_STUB_LOG")" "blocked picturedir should exit before invoking curl"
+
 picturedir="$TEST_TMPDIR/pictures"
 success_stdout="$TEST_TMPDIR/success.stdout"
 success_stderr="$TEST_TMPDIR/success.stderr"
