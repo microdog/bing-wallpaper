@@ -215,4 +215,15 @@ if run_cli "$TEST_TMPDIR/wallpaper.stdout" "$wallpaper_stderr" --set-wallpaper -
 fi
 assert_eq "Setting wallpaper is only supported on macOS." "$(cat "$wallpaper_stderr")" "non-macOS wallpaper request should fail with the exact required stderr"
 
+: >"$CURL_STUB_LOG"
+state_tracking_stdout="$TEST_TMPDIR/state-tracking.stdout"
+state_tracking_stderr="$TEST_TMPDIR/state-tracking.stderr"
+export BING_WALLPAPER_CURL_BIN="$TEST_TMPDIR/bin/curl-stub"
+export BING_WALLPAPER_OSASCRIPT_BIN="$TEST_TMPDIR/bin/osascript-stub"
+if run_bing_wallpaper --picturedir "$TEST_TMPDIR/state-pictures" --set-wallpaper --boost 1 >"$state_tracking_stdout" 2>"$state_tracking_stderr"; then
+    fail "sourced run_bing_wallpaper should fail when wallpaper setting is unsupported"
+fi
+assert_eq "$TEST_TMPDIR/state-pictures/OHR.SampleBeta_1920x1080.jpg" "$LAST_DOWNLOADED_FILE" "post-download failure should preserve LAST_DOWNLOADED_FILE"
+assert_eq "OHR.SampleBeta_1920x1080.jpg" "$LAST_FILENAME" "post-download failure should preserve LAST_FILENAME"
+
 printf 'PASS test_bing_wallpaper (%d checks)\n' "$CHECKS"

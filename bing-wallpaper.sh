@@ -318,17 +318,22 @@ run_bing_wallpaper() {
         script_path=$1
         shift
         source "$script_path"
+        trap '"'"'
+            {
+                printf "LAST_DOWNLOADED_FILE=%q\n" "$LAST_DOWNLOADED_FILE"
+                printf "LAST_FILENAME=%q\n" "$LAST_FILENAME"
+            } >"$BING_WALLPAPER_STATE_FILE"
+        '"'"' EXIT
         run_bing_wallpaper_impl "$@"
-        {
-            printf "LAST_DOWNLOADED_FILE=%q\n" "$LAST_DOWNLOADED_FILE"
-            printf "LAST_FILENAME=%q\n" "$LAST_FILENAME"
-        } >"$BING_WALLPAPER_STATE_FILE"
     ' bash "$script_path" "$@"; then
         status=0
-        # shellcheck disable=SC1090
-        source "$state_file"
     else
         status=$?
+    fi
+
+    if [[ -s "$state_file" ]]; then
+        # shellcheck disable=SC1090
+        source "$state_file"
     fi
 
     rm -f "$state_file"
