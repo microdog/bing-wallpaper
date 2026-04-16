@@ -166,6 +166,12 @@ run_cli "$version_stdout" "$version_stderr" --version
 assert_eq "0.5.0" "$(cat "$version_stdout")" "--version should print script version"
 assert_eq "" "$(cat "$version_stderr")" "--version should not write to stderr"
 
+relative_version_stdout="$TEST_TMPDIR/relative-version.stdout"
+relative_version_stderr="$TEST_TMPDIR/relative-version.stderr"
+bash -lc 'cd "$1"; source ./bing-wallpaper.sh; cd /tmp; run_bing_wallpaper --version' bash "$ROOT_DIR" >"$relative_version_stdout" 2>"$relative_version_stderr"
+assert_eq "0.5.0" "$(cat "$relative_version_stdout")" "relative-path sourced run_bing_wallpaper should still find the script after cd"
+assert_eq "" "$(cat "$relative_version_stderr")" "relative-path sourced version call should not write to stderr"
+
 invalid_resolution_stderr="$TEST_TMPDIR/invalid-resolution.stderr"
 if run_cli "$TEST_TMPDIR/invalid-resolution.stdout" "$invalid_resolution_stderr" --resolution 123x456; then
     fail "invalid resolution should fail"
@@ -177,6 +183,12 @@ if run_cli "$TEST_TMPDIR/invalid-boost.stdout" "$invalid_boost_stderr" --boost n
     fail "invalid boost should fail"
 fi
 assert_contains "Boost must be a positive integer: nope" "$(cat "$invalid_boost_stderr")" "invalid boost should explain the failure"
+
+negative_boost_stderr="$TEST_TMPDIR/negative-boost.stderr"
+if run_cli "$TEST_TMPDIR/negative-boost.stdout" "$negative_boost_stderr" --boost -1; then
+    fail "negative boost should fail"
+fi
+assert_eq "Boost must be a positive integer: -1" "$(cat "$negative_boost_stderr")" "negative boost should reach explicit boost validation"
 
 : >"$CURL_STUB_LOG"
 blocked_stdout="$TEST_TMPDIR/blocked.stdout"
@@ -193,6 +205,11 @@ success_stderr="$TEST_TMPDIR/success.stderr"
 run_cli "$success_stdout" "$success_stderr" --picturedir "$picturedir" --boost 2
 assert_file_exists "$picturedir/OHR.SampleAlpha_1920x1080.jpg" "successful download should create first image"
 assert_file_exists "$picturedir/OHR.SampleBeta_1920x1080.jpg" "successful download should create second image"
+
+dash_filename_stdout="$TEST_TMPDIR/dash-filename.stdout"
+dash_filename_stderr="$TEST_TMPDIR/dash-filename.stderr"
+run_cli "$dash_filename_stdout" "$dash_filename_stderr" --picturedir "$TEST_TMPDIR/dash-pictures" --filename -dash.jpg --boost 1
+assert_file_exists "$TEST_TMPDIR/dash-pictures/-dash.jpg" "dash-prefixed filename should be accepted as an option value"
 
 : >"$CURL_STUB_LOG"
 skip_stdout="$TEST_TMPDIR/skip.stdout"

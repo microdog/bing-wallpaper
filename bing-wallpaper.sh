@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 
 SCRIPT=$(basename "${BASH_SOURCE[0]}")
+SCRIPT_PATH=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/$(basename "${BASH_SOURCE[0]}")
 VERSION='0.5.0'
 RESOLUTIONS=(UHD 1920x1200 1920x1080 800x480 400x240)
 
 readonly SCRIPT
+readonly SCRIPT_PATH
 readonly VERSION
 readonly RESOLUTIONS
 
@@ -128,9 +130,9 @@ derive_filename_from_url() {
 
 require_option_value() {
     local option="$1"
-    local value="${2-}"
+    local remaining_args="$2"
 
-    if [[ -z "$value" ]] || [[ "$value" == -* ]]; then
+    if [[ "$remaining_args" -lt 2 ]]; then
         die "Option requires a value: $option"
     fi
 }
@@ -139,17 +141,17 @@ parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -r|--resolution)
-                require_option_value "$1" "${2-}" || return 1
+                require_option_value "$1" "$#" || return 1
                 RESOLUTION="$2"
                 shift 2
                 ;;
             -p|--picturedir)
-                require_option_value "$1" "${2-}" || return 1
+                require_option_value "$1" "$#" || return 1
                 PICTURE_DIR="$2"
                 shift 2
                 ;;
             -n|--filename)
-                require_option_value "$1" "${2-}" || return 1
+                require_option_value "$1" "$#" || return 1
                 FILENAME="$2"
                 shift 2
                 ;;
@@ -162,7 +164,7 @@ parse_args() {
                 shift
                 ;;
             -b|--boost)
-                require_option_value "$1" "${2-}" || return 1
+                require_option_value "$1" "$#" || return 1
                 BOOST="$2"
                 shift 2
                 ;;
@@ -311,7 +313,7 @@ run_bing_wallpaper() {
 
     LAST_DOWNLOADED_FILE=''
     LAST_FILENAME=''
-    script_path=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")
+    script_path="$SCRIPT_PATH"
     state_file=$(mktemp "${TMPDIR:-/tmp}/bing-wallpaper-state.XXXXXX") || return 1
 
     if BING_WALLPAPER_STATE_FILE="$state_file" bash -euo pipefail -c '
