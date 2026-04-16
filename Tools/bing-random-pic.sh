@@ -24,15 +24,15 @@ BING_SCRIPT="$SCRIPT_DIR/../bing-wallpaper.sh"
 # shellcheck source=../bing-wallpaper.sh disable=SC1091
 source "$BING_SCRIPT"
 
-normalize_path_for_command() {
+resolve_absolute_path() {
     local path="$1"
+    local path_dir
+    local path_base
 
-    if [[ "$path" == -* ]]; then
-        printf './%s\n' "$path"
-        return 0
-    fi
+    path_dir=$(dirname -- "$path")
+    path_base=$(basename -- "$path")
 
-    printf '%s\n' "$path"
+    printf '%s/%s\n' "$(cd -- "$path_dir" && pwd -P)" "$path_base"
 }
 
 run_bing_wallpaper "$@"
@@ -42,24 +42,23 @@ if [[ -z "${LAST_DOWNLOADED_FILE:-}" ]]; then
     exit 1
 fi
 
-picture_dir=$(dirname "$LAST_DOWNLOADED_FILE")
+downloaded_file=$(resolve_absolute_path "$LAST_DOWNLOADED_FILE")
+picture_dir=$(dirname -- "$downloaded_file")
 today_link="$picture_dir/today.jpg"
 random_link="$picture_dir/random.jpg"
 random_candidates=()
 
 while IFS= read -r candidate; do
-    if [[ "$candidate" != "$LAST_DOWNLOADED_FILE" ]]; then
+    if [[ "$candidate" != "$downloaded_file" ]]; then
         random_candidates[${#random_candidates[@]}]="$candidate"
     fi
-done < <(find "$picture_dir" -maxdepth 1 -type f -name '*_*.jpg' | sort)
+done < <(find -- "$picture_dir" -maxdepth 1 -type f -name '*_*.jpg' | sort)
 
-random_target="$LAST_DOWNLOADED_FILE"
+random_target="$downloaded_file"
 if [[ ${#random_candidates[@]} -gt 0 ]]; then
     random_target="${random_candidates[RANDOM % ${#random_candidates[@]}]}"
 fi
 
 rm -f -- "$today_link" "$random_link"
-ln -s "$(normalize_path_for_command "$LAST_DOWNLOADED_FILE")" \
-    "$(normalize_path_for_command "$today_link")"
-ln -s "$(normalize_path_for_command "$random_target")" \
-    "$(normalize_path_for_command "$random_link")"
+ln -s -- "$downloaded_file" "$today_link"
+ln -s -- "$random_target" "$random_link"

@@ -40,6 +40,16 @@ assert_file_exists() {
     pass_check
 }
 
+run_random_helper() {
+    local run_dir="$1"
+    shift
+
+    (
+        cd "$run_dir"
+        bash "$RANDOM_HELPER" "$@"
+    )
+}
+
 make_curl_stub() {
     local stub_path="$1"
 
@@ -114,7 +124,7 @@ export CURL_STUB_METADATA_PAYLOAD
 export BING_WALLPAPER_CURL_BIN="$TEST_TMPDIR/bin/curl-stub"
 
 picture_dir="$TEST_TMPDIR/pictures dir"
-bash "$RANDOM_HELPER" --quiet --picturedir "$picture_dir"
+run_random_helper "$ROOT_DIR" --quiet --picturedir "$picture_dir"
 
 today_target=$(readlink "$picture_dir/today.jpg")
 random_target=$(readlink "$picture_dir/random.jpg")
@@ -122,6 +132,19 @@ expected_target="$picture_dir/OHR.SampleAlpha_1920x1080.jpg"
 
 assert_eq "$expected_target" "$today_target" "today.jpg should point to the downloaded image"
 assert_eq "$expected_target" "$random_target" "random.jpg should fall back to today's image when no alternate image exists"
+
+dash_run_dir="$TEST_TMPDIR/dash helper run"
+mkdir -p "$dash_run_dir"
+run_random_helper "$dash_run_dir" --quiet --picturedir -dashdir
+
+dash_today_path="$dash_run_dir/-dashdir/today.jpg"
+dash_random_path="$dash_run_dir/-dashdir/random.jpg"
+dash_expected_target="$dash_run_dir/-dashdir/OHR.SampleAlpha_1920x1080.jpg"
+
+assert_eq "$dash_expected_target" "$(readlink "$dash_today_path")" "today.jpg should work for dash-prefixed relative picture directories"
+assert_eq "$dash_expected_target" "$(readlink "$dash_random_path")" "random.jpg should fall back correctly for dash-prefixed relative picture directories"
+assert_file_exists "$dash_today_path" "today.jpg symlink should resolve for dash-prefixed relative picture directories"
+assert_file_exists "$dash_random_path" "random.jpg symlink should resolve for dash-prefixed relative picture directories"
 
 bash "$GNOME_HELPER"
 
